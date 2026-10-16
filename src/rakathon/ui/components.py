@@ -42,7 +42,12 @@ def context_caption(g: GlobalResults, analysis_label: str | None = None) -> None
     st.caption(" · ".join(parts))
 
 
-def direction_text(direction: str) -> str:
+DIR_SHORT = {"longer": "▲ delší", "shorter": "▼ kratší", "equal": "● shodné"}
+
+
+def direction_text(direction: str, short: bool = False) -> str:
+    if short:
+        return DIR_SHORT.get(direction or "", "–")
     return DIR_TEXT.get(direction or "", "–")
 
 

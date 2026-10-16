@@ -24,7 +24,6 @@ from rakathon.formatting import (
     fmt_signed,
     fmt_signed_days,
     patients_word,
-    stays_word,
 )
 
 LabelFn = Callable[[str], str]
@@ -108,7 +107,7 @@ def explain_flag(
         f"Rozdíl je {fmt_signed_days(drv['residual'])} ({DIRECTION_LABELS[score_row['direction']]}). "
         f"Standardizovaná odchylka {fmt_num(drv['z'], 2)} ({scale_txt}, vůči lokální referenci) "
         f"{'překračuje' if score_row['outlier'] else 'nepřekračuje'} pracovní práh {fmt_num(config.threshold)}. "
-        f"Výpočet vychází z {support_n} {stays_word(support_n) if support_n != 1 else 'pobytu'}."
+        f"Počet pobytů ve výpočtu pacienta: {support_n}."
     )
     if len(dims_rows) > 1:
         summary += (

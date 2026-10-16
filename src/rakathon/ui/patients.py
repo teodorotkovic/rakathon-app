@@ -51,19 +51,21 @@ def overview_table(g: GlobalResults, a: AnalysisResult, reviews_cur: pd.DataFram
     df = pd.DataFrame(index=t.index)
     df["ID"] = t.index
     df["Věk"] = t["age_group"]
-    df["Pohlaví"] = t["sex"]
     df["Diagnóza"] = t["dx_icd10"] + " · " + t["dx_group_label"].where(t["dx_group"] != "", "nezařazeno")
     df["Pozorováno (dny)"] = r["observed"]
     df["Očekávání (dny)"] = r["expected"]
     df["Rozdíl (dny)"] = r["residual"]
     df["Míra odchylky"] = s["score"]
-    df["Pásmo"] = s["band"]
-    df["Směr"] = s["direction"].map(components.direction_text).where(s["scored"], "–")
+    df["Směr"] = (
+        s["direction"].map(lambda d: components.direction_text(d, short=True)).where(s["scored"], "–")
+    )
     df["Opora reference"] = r.apply(components.support_text, axis=1)
-    df["Pobytů"] = r["support_n"].astype(int)
     df["Posouzení"] = [review_label(rv.get(p, "")) for p in df.index]
+    df["Pásmo"] = s["band"]
+    df["Pobytů"] = r["support_n"].astype(int)
     df["Důvod nehodnocení"] = s["not_scored_reason"]
     # skryté pomocné sloupce pro filtry
+    df["_sex"] = t["sex"]
     df["_scored"] = s["scored"].astype(bool)
     df["_outlier"] = s["outlier"].astype(bool)
     df["_direction"] = s["direction"]
@@ -131,7 +133,7 @@ def _filters(df: pd.DataFrame, g: GlobalResults) -> tuple[pd.DataFrame, dict]:
     if ages:
         m &= df["Věk"].isin(ages)
     if sexes:
-        m &= df["Pohlaví"].isin(sexes)
+        m &= df["_sex"].isin(sexes)
     if dxs:
         m &= df["Diagnóza"].isin(dxs)
     m &= {
@@ -325,7 +327,12 @@ def render_detail(pid: str, g: GlobalResults, a: AnalysisResult) -> None:
         fmt_num(srow["score"], 2) if srow["scored"] else "nehodnoceno",
         help="Pracovní práh " + fmt_num(a.config.threshold),
     )
-    c[4].metric("Opora reference", components.support_text(r))
+    n_ref = int(r["reference_n"])
+    c[4].metric(
+        "Opora reference",
+        f"{n_ref} pac." if n_ref else "nelze posoudit",
+        help=components.support_text(r) + (f" – {r['baseline_reason']}" if r["baseline_reason"] else ""),
+    )
     if srow["scored"]:
         st.markdown(
             f"**{srow['band'].capitalize()}** · {components.direction_text(srow['direction'])}"

@@ -56,7 +56,7 @@ def render() -> None:
     _controls(g)
     a = state.local_analysis()
     components.context_caption(g, f"lokální pohled `{a.analysis_id}`")
-    _reference_info(a)
+    _reference_info(g, a)
 
     chart_key = f"dv_chart_{state.nonce()}"
     chart_sel = _chart_selection(chart_key)
@@ -157,7 +157,7 @@ def _controls(g: GlobalResults) -> None:
         state.set_analysis_config(new)
 
 
-def _reference_info(a: AnalysisResult) -> None:
+def _reference_info(g: GlobalResults, a: AnalysisResult) -> None:
     cfg = a.config
     n_scored = int(a.scores["scored"].sum())
     if cfg.reference_ids is None:
@@ -169,7 +169,8 @@ def _reference_info(a: AnalysisResult) -> None:
         )
     cal = a.calibration
     parts = [
-        f"{r.metric_id}: střed {fmt_num(r.center, 2)}, měřítko {fmt_num(r.scale, 2)} ({r.scale_method})"
+        f"{g.metric_labels.get(r.metric_id, r.metric_id)}: střed {fmt_num(r.center, 2)}, "
+        f"měřítko {fmt_num(r.scale, 2)} ({r.scale_method}, n={r.n_reference})"
         for r in cal.itertuples()
     ]
     st.markdown(txt + f" Skórováno {n_scored} pacientů, nad prahem {int(a.scores['outlier'].sum())}.")
@@ -214,7 +215,7 @@ def _list_table(g: GlobalResults, a: AnalysisResult) -> pd.DataFrame:
             "Dg.": t.loc[s.index, "dx_icd10"].to_numpy(),
             "Míra": s["score"].to_numpy(),
             "Směr": [
-                components.direction_text(d) if sc else "–"
+                components.direction_text(d, short=True) if sc else "–"
                 for d, sc in zip(s["direction"], s["scored"], strict=True)
             ],
             "Posouzení": [review_label(rv.get(p, "")) for p in s.index],
@@ -439,7 +440,7 @@ def _ranked(g: GlobalResults, a: AnalysisResult) -> None:
                 "Dg.": t.at[r.patient_id, "dx_icd10"],
                 "Míra": r.score,
                 "Pásmo": r.band,
-                "Směr": components.direction_text(r.direction),
+                "Směr": components.direction_text(r.direction, short=True),
                 "Proč": (
                     f"{g.metric_labels[r.driver_metric]}: {fmt_num(d['observed'])} vs. {fmt_num(d['expected'])} dní "
                     f"({fmt_signed_days(d['residual'])})"
@@ -653,59 +654,7 @@ def _views_and_export(g: GlobalResults, a: AnalysisResult, listed_ids: list[str]
     st.divider()
     c1, c2 = st.columns(2)
     with c1, st.expander("Uložit / načíst pohled", icon=":material/bookmark:"):
-        name = st.text_input("Název pohledu", key="dv_view_name", placeholder="např. C91 dlouhé pobyty")
-        if st.button("Uložit pohled", key="dv_view_save", disabled=not name.strip()):
-            store = state.store()
-            store.save_view(
-                {
-                    "view_id": a.analysis_id + "-" + now_iso()[-11:-1].replace(":", "").replace(".", ""),
-                    "name": name.strip(),
-                    "created_at": now_iso(),
-                    "dataset_fingerprint": g.dataset_fingerprint,
-                    "source_mode": g.source_mode.value,
-                    "baseline_config_id": g.baseline_config_id,
-                    "analysis_id": a.analysis_id,
-                    "feature_schema_version": FEATURE_SCHEMA_VERSION,
-                    "method_version": METHOD_VERSION,
-                    "baseline_config_json": canonical_json(g.baseline.config.to_dict()),
-                    "analysis_config_json": canonical_json(a.config.to_dict()),
-                    "note": "",
-                }
-            )
-            state.flash("success", f"Pohled „{name.strip()}“ uložen.")
-            st.rerun()
-        views = state.store().load_views()
-        if views.empty:
-            st.caption("Pro tento dataset zatím nejsou uložené pohledy.")
-            return
-        idx = st.selectbox(
-            "Uložené pohledy",
-            list(range(len(views))),
-            key="dv_view_pick",
-            format_func=lambda i: f"{views.iloc[i]['name']} · {views.iloc[i]['created_at'][:16]}",
-        )
-        v = views.iloc[idx]
-        version_ok = (
-            v["feature_schema_version"] == FEATURE_SCHEMA_VERSION and v["method_version"] == METHOD_VERSION
-        )
-        if not version_ok:
-            st.warning(
-                "Pohled byl uložen jinou verzí výpočtu – načte se jako nový výpočet s novou identitou; "
-                "původní posouzení zůstanou historická."
-            )
-        same_global = v["baseline_config_id"] == g.baseline_config_id
-        if not same_global:
-            st.info(
-                "Pohled používá jiné globální očekávání. Načtením se globální konfigurace přepne a přepočítá."
-            )
-        if st.button("Načíst pohled", key="dv_view_load"):
-            st.session_state[state.K_BASELINE] = BaselineConfig.from_dict(
-                json.loads(v["baseline_config_json"])
-            )
-            state.set_analysis_config(AnalysisConfig.from_dict(json.loads(v["analysis_config_json"])))
-            _reset_widgets()
-            state.flash("success", f"Načten pohled „{v['name']}“.")
-            st.rerun()
+        _saved_views(g, a)
     with c2:
         st.markdown("**Export aktuální analýzy**")
         st.caption(
@@ -720,3 +669,57 @@ def _views_and_export(g: GlobalResults, a: AnalysisResult, listed_ids: list[str]
             {"seznam": "levý panel", "n": len(listed_ids)},
             key="dl_analysis",
         )
+
+
+def _saved_views(g: GlobalResults, a: AnalysisResult) -> None:
+    name = st.text_input("Název pohledu", key="dv_view_name", placeholder="např. C91 dlouhé pobyty")
+    if st.button("Uložit pohled", key="dv_view_save", disabled=not name.strip()):
+        store = state.store()
+        store.save_view(
+            {
+                "view_id": a.analysis_id + "-" + now_iso()[-11:-1].replace(":", "").replace(".", ""),
+                "name": name.strip(),
+                "created_at": now_iso(),
+                "dataset_fingerprint": g.dataset_fingerprint,
+                "source_mode": g.source_mode.value,
+                "baseline_config_id": g.baseline_config_id,
+                "analysis_id": a.analysis_id,
+                "feature_schema_version": FEATURE_SCHEMA_VERSION,
+                "method_version": METHOD_VERSION,
+                "baseline_config_json": canonical_json(g.baseline.config.to_dict()),
+                "analysis_config_json": canonical_json(a.config.to_dict()),
+                "note": "",
+            }
+        )
+        state.flash("success", f"Pohled „{name.strip()}“ uložen.")
+        st.rerun()
+    views = state.store().load_views()
+    if views.empty:
+        st.caption("Pro tento dataset zatím nejsou uložené pohledy.")
+        return
+    idx = st.selectbox(
+        "Uložené pohledy",
+        list(range(len(views))),
+        key="dv_view_pick",
+        format_func=lambda i: f"{views.iloc[i]['name']} · {views.iloc[i]['created_at'][:16]}",
+    )
+    v = views.iloc[idx]
+    version_ok = (
+        v["feature_schema_version"] == FEATURE_SCHEMA_VERSION and v["method_version"] == METHOD_VERSION
+    )
+    if not version_ok:
+        st.warning(
+            "Pohled byl uložen jinou verzí výpočtu – načte se jako nový výpočet s novou identitou; "
+            "původní posouzení zůstanou historická."
+        )
+    same_global = v["baseline_config_id"] == g.baseline_config_id
+    if not same_global:
+        st.info(
+            "Pohled používá jiné globální očekávání. Načtením se globální konfigurace přepne a přepočítá."
+        )
+    if st.button("Načíst pohled", key="dv_view_load"):
+        st.session_state[state.K_BASELINE] = BaselineConfig.from_dict(json.loads(v["baseline_config_json"]))
+        state.set_analysis_config(AnalysisConfig.from_dict(json.loads(v["analysis_config_json"])))
+        _reset_widgets()
+        state.flash("success", f"Načten pohled „{v['name']}“.")
+        st.rerun()
