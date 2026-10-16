@@ -97,6 +97,13 @@ REVIEW_LABELS = {
 }
 
 
+def review_label(status: str) -> str:
+    """Popisek stavu posouzení; neznámý stav se vrací raw (nikdy nevyhazuje)."""
+    return {k.value: v for k, v in REVIEW_LABELS.items()}.get(
+        status, status or REVIEW_LABELS[ReviewStatus.NOT_REVIEWED]
+    )
+
+
 def canonical_json(obj: Any) -> str:
     """Deterministická serializace pro hashování konfigurací."""
     return json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
