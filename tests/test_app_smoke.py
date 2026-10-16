@@ -85,6 +85,27 @@ def test_full_doctor_flow(app, tmp_path):
     assert "nový\nřádek" in reviews.iloc[-1]["comment"]
 
 
+def test_global_recompute_creates_new_context(app):
+    at = app
+    pick = at.selectbox(key="pf_pick")
+    pid = pick.options[0]
+    pick.set_value(pid).run()
+    at.button(key="pf_open").click().run()
+    _button(at, "Uložit posouzení").click().run()  # posouzení ve výchozím globálním kontextu
+    old_id = next(c.value for c in at.caption if "globální očekávání" in c.value)
+
+    method = next(s for s in at.sidebar.selectbox if s.label == "Metoda očekávání")
+    method.set_value("ridge_loo")
+    next(b for b in at.sidebar.button if b.label == "Přepočítat očekávání").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    new_id = next(c.value for c in at.caption if "globální očekávání" in c.value)
+    assert new_id != old_id
+    assert any("Rozklad predikce modelu" in c.value for c in at.caption)
+    # posouzení z předchozího kontextu není aktuální, jen v historii
+    assert any("Neposouzeno" in m.value for m in at.markdown if "Aktuální posouzení" in m.value)
+    assert any("1 jinde" in e.label for e in at.expander)
+
+
 def test_reset_view_restores_defaults(app):
     at = app
     at.switch_page("views/deviations.py").run()

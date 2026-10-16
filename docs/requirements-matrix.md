@@ -28,4 +28,5 @@ Stav k 2026-10-17. „Hotovo“ = funkční chování ověřené uvedeným způs
 | Nová popisná vlastnost bez přepisu UI | `features/extra.py`, sidebar, detail, filtry, popis skupin | `test_extra.py` | hotovo |
 | Ochrana proti vzorcům v exportu | `exports.excel_safe` | `test_excel_safe_only_touches_text_columns` | hotovo |
 | Tři množiny pacientů oddělené | `ui/state.py`, `ui/deviations.py` | `test_local_analysis_never_changes_global_baseline` | hotovo |
-| Druhý baseline (Ridge), Isolation Forest, PCA (P1) | – | – | **neimplementováno** (viz TASKS) |
+| Druhý baseline (P1): Ridge nad log1p s LOO a rozkladem stejného fitu | `models/regression.py`, volba v postranním panelu, tabulka rozkladu v detailu | `test_regression.py`, AppTest `test_global_recompute_creates_new_context` | **hotovo** |
+| Isolation Forest, bootstrap, PCA (P1) | – | – | **neimplementováno** (viz TASKS) |

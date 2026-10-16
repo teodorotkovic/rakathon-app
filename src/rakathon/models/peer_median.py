@@ -149,6 +149,7 @@ class PeerMedianBaseline:
             "ref_min": float(values.min()),
             "ref_max": float(values.max()),
             "population_median": population_median,
+            "model_detail": "",
         }
 
     @staticmethod
@@ -169,4 +170,5 @@ class PeerMedianBaseline:
             "ref_min": np.nan,
             "ref_max": np.nan,
             "population_median": population_median,
+            "model_detail": "",
         }

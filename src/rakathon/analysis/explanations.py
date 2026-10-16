@@ -9,6 +9,7 @@ Všechna čísla v textech pocházejí z výpočtu; nic se negeneruje jazykovým
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 
 import numpy as np
@@ -45,6 +46,9 @@ def explain_expectation(row: pd.Series, metric_label: str) -> str:
                 f"{fmt_days(row['population_median'])}; nejde o klinicky srovnatelné očekávání."
             )
         return txt
+    detail = row.get("model_detail")
+    if isinstance(detail, str) and detail:
+        return _explain_model(row, json.loads(detail), metric_label)
     n = int(row["reference_n"])
     txt = (
         f"**{metric_label}:** očekávání {fmt_days(row['expected'])} = medián hodnot {n} {patients_word(n)} "
@@ -64,6 +68,57 @@ def explain_expectation(row: pd.Series, metric_label: str) -> str:
         "(rozložení pozorovaných hodnot, ne kalibrovaný predikční interval)."
     )
     if status == BaselineStatus.LIMITED.value:
+        txt += f" ⚠ {row['baseline_reason']}"
+    return txt
+
+
+def model_terms_table(detail: dict) -> pd.DataFrame:
+    """Rozklad predikce regrese: základ + příspěvky v log1p škále a jako násobek (1 + délka)."""
+    rows = [
+        {
+            "Složka": "základ modelu",
+            "Hodnota": "",
+            "Příspěvek (log1p)": detail["intercept"],
+            "Násobek (1 + délka)": float(np.exp(detail["intercept"])),
+        }
+    ]
+    for t in detail["terms"]:
+        rows.append(
+            {
+                "Složka": t["factor"],
+                "Hodnota": t["value"] + ("" if t["seen_in_training"] else " (nevidáno)"),
+                "Příspěvek (log1p)": t["contribution"],
+                "Násobek (1 + délka)": float(np.exp(t["contribution"])),
+            }
+        )
+    rows.append(
+        {
+            "Složka": "součet = predikce",
+            "Hodnota": "",
+            "Příspěvek (log1p)": detail["pred_log"],
+            "Násobek (1 + délka)": float(np.exp(detail["pred_log"])),
+        }
+    )
+    return pd.DataFrame(rows)
+
+
+def _explain_model(row: pd.Series, detail: dict, metric_label: str) -> str:
+    parts = [f"{t['factor']} {t['value']} ×{fmt_num(np.exp(t['contribution']), 2)}" for t in detail["terms"]]
+    txt = (
+        f"**{metric_label}:** modelové typické očekávání {fmt_days(row['expected'])} (Ridge regrese v log1p škále, "
+        f"natrénovaná na {detail['train_n']} jiných pacientech – hodnocený pacient v modelu není). "
+        f"Rozklad téže predikce: základ ≈ {fmt_days(np.expm1(detail['intercept']))}; "
+        + "; ".join(parts)
+        + " (násobky platí pro 1 + délku pobytu; je to typická hodnota modelu, ne aritmetický průměr)."
+    )
+    n = int(row["reference_n"])
+    txt += (
+        f" Pro srovnání: {n} {patients_word(n)} se stejnou diagnostickou kategorií má kvartily "
+        f"{fmt_num(row['ref_q1'])}–{fmt_num(row['ref_q3'])} dní."
+    )
+    if row["factors_not_used"]:
+        txt += f" Nezohledněno: {row['factors_not_used']}."
+    if row["baseline_reason"]:
         txt += f" ⚠ {row['baseline_reason']}"
     return txt
 

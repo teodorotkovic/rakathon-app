@@ -47,7 +47,7 @@ Po instalaci závislostí nepotřebuje síť.
 
 ## Testy a kontroly
 ```powershell
-python -m uv run pytest                                  # 31 testů vč. AppTest průchodu UI
+python -m uv run pytest                                  # 35 testů vč. AppTest průchodů UI
 python -m uv run ruff check . ; python -m uv run ruff format --check .
 python -m uv run python scripts/check_real_data.py       # strukturální kontrola na skutečných datech (bez výpisu pacientů)
 python -m uv run python scripts/profile_data.py          # profil dat do runtime/profile/

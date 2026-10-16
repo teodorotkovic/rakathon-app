@@ -20,6 +20,7 @@ from rakathon.features.extra import (
     validate_meta,
 )
 from rakathon.features.patient_table import reserved_columns
+from rakathon.formatting import fmt_num
 from rakathon.ui import state
 
 SEVERITY_LABELS = {"blocking": "Blokující", "warning": "Upozornění", "info": "Informace"}
@@ -122,7 +123,17 @@ def _global_settings() -> None:
             f"Aktivní konfigurace `{cfg.config_id}`. Změna vytvoří novou verzi výsledků; "
             "dřívější posouzení zůstanou v historii jiného kontextu."
         )
+        _oof_caption()
         with st.form(f"global_cfg_{state.nonce()}"):
+            methods = list(BASELINE_METHOD_LABELS)
+            method = st.selectbox(
+                "Metoda očekávání",
+                methods,
+                index=methods.index(cfg.method),
+                format_func=lambda m: BASELINE_METHOD_LABELS[m],
+                help="Referenční medián podobných pacientů (výchozí) nebo regrese se stejnými vstupy. "
+                "Obě metody počítají očekávání bez vlastního výsledku pacienta.",
+            )
             rules = list(EPISODE_RULES)
             rule = st.selectbox(
                 "Výběr pobytů pro ukazatel",
@@ -155,6 +166,7 @@ def _global_settings() -> None:
             excluded = sorted(set(keep_excl) | set(pending))
             new = replace(
                 cfg,
+                method=method,
                 episode_rule=rule,
                 min_reference=int(min_ref),
                 min_limited_reference=int(min_lim),
@@ -175,6 +187,23 @@ def _global_settings() -> None:
             st.session_state[state.K_PENDING_EXCL] = {}
             state.flash("info", "Obnoveno výchozí globální očekávání.")
             st.rerun()
+
+
+BASELINE_METHOD_LABELS = {
+    "peer_median": "Referenční medián podobných pacientů (LOO)",
+    "ridge_loo": "Ridge regrese nad log1p (dg. kategorie, věk, pohlaví; LOO)",
+}
+
+
+def _oof_caption() -> None:
+    g = state.global_results()
+    parts = []
+    for s in g.baseline.meta.get("oof_summary", []):
+        parts.append(
+            f"{g.metric_labels.get(s['metric_id'], s['metric_id'])}: hodnoceno {s['n_evaluable']}/{s['n_patients']}, "
+            f"medián |rozdílu| {fmt_num(s['median_abs_residual_days'])} d"
+        )
+    st.caption("Popisné leave-one-out chyby (ne klinická validace): " + "; ".join(parts) + ".")
 
 
 def _extra_features() -> None:

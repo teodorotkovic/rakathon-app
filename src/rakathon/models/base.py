@@ -30,6 +30,7 @@ BASELINE_OUTPUT_COLUMNS = [
     "ref_min",
     "ref_max",
     "population_median",
+    "model_detail",  # JSON s rozkladem predikce (regrese), jinak prázdné
 ]
 
 
@@ -46,8 +47,9 @@ class BaselineModel(Protocol):
 
 def get_baseline_model(method: str) -> BaselineModel:
     from rakathon.models.peer_median import PeerMedianBaseline
+    from rakathon.models.regression import RidgeLooBaseline
 
-    methods: dict[str, BaselineModel] = {"peer_median": PeerMedianBaseline()}
+    methods: dict[str, BaselineModel] = {"peer_median": PeerMedianBaseline(), "ridge_loo": RidgeLooBaseline()}
     if method not in methods:
         raise KeyError(f"Neznámá metoda baseline: {method}")
     return methods[method]

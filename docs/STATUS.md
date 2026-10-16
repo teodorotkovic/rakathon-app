@@ -13,12 +13,16 @@ Aktualizováno: 2026-10-17 (noc), větev `main`, lokální commity M0–M4, nic 
   (ukazatele/škála/práh, role výběru a reference, grafy s výběrem, seřazené případy, skupiny, kontext, pohledy).
 - Persistence posouzení s historií a kontextem, navržení vyřazení pacienta z globálního výpočtu, ZIP export.
 - Import doplňkových popisných vlastností s validací a opravitelným typem.
+- **P1:** volitelná baseline Ridge nad log1p s LOO a rozkladem příspěvků ze stejného fitu (přepínač
+  „Metoda očekávání“); popisné LOO chyby obou metod v postranním panelu.
 
 ## Provedené kontroly (2026-10-16/17)
 | Kontrola | Výsledek |
 |---|---|
 | `python -m uv sync` (Python 3.12.6, streamlit 1.66.0, pandas 3.0.6, numpy 2.5.4, plotly 7.1.0, scikit-learn 1.9.1) | OK |
-| `python -m uv run pytest` | 31 passed (včetně 2 AppTest průchodů UI) |
+| `python -m uv sync --locked` | OK |
+| `python -m uv run pytest` | 35 passed (včetně 3 AppTest průchodů UI: lékařský průchod, globální přepočet, reset pohledu) |
+| Ridge vs. peer medián na skutečných datech | 107/157 hodnoceno u obou; medián \|rozdílu\| 1,13 vs. 1,25 dne; Ridge ~8 s výpočtu |
 | `python -m uv run ruff check .` | All checks passed |
 | `python -m uv run python scripts/check_real_data.py` (skutečná data) | 13/13 OK; 107 hodnotitelných, 3 nad prahem |
 | Spuštění `streamlit run app.py` + `GET /_stcore/health` | ok (skutečná i syntetická data) |

@@ -6,10 +6,17 @@ Pořadí a skóre vychází z uloženého globálního kontextu a VÝCHOZÍ lok�
 
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import streamlit as st
 
-from rakathon.analysis.explanations import explain_differences, explain_expectation, explain_flag
+from rakathon.analysis.explanations import (
+    explain_differences,
+    explain_expectation,
+    explain_flag,
+    model_terms_table,
+)
 from rakathon.analysis.similarity import similar_patients
 from rakathon.domain import EPISODE_CLASS_LABELS, AnalysisResult, EpisodeClass, ReviewStatus, review_label
 from rakathon.features.catalog import EPISODE_RULES, descriptor_columns
@@ -394,6 +401,22 @@ def _tab_explanation(pid, g: GlobalResults, a: AnalysisResult, res: pd.DataFrame
     main = a.config.metrics[0]
     r = res.loc[main]
     peers = [p for p in str(r["reference_ids"]).split(";") if p]
+    is_model = isinstance(r.get("model_detail"), str) and bool(r.get("model_detail"))
+    if is_model:
+        st.caption(
+            f"Rozklad predikce modelu pro „{g.metric_labels[main]}“ (stejný leave-one-out fit, který vydal "
+            "očekávání; součet příspěvků v log1p škále = predikce)."
+        )
+        st.dataframe(
+            model_terms_table(json.loads(r["model_detail"])),
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Příspěvek (log1p)": st.column_config.NumberColumn(format="%+.3f"),
+                "Násobek (1 + délka)": st.column_config.NumberColumn(format="×%.2f"),
+            },
+        )
+    peer_word = "pacientů se stejnou diagnostickou kategorií" if is_model else "referenčních pacientů"
     if peers:
         vals = g.results_long[
             (g.results_long["metric_id"] == main) & g.results_long["patient_id"].isin(peers)
@@ -410,8 +433,8 @@ def _tab_explanation(pid, g: GlobalResults, a: AnalysisResult, res: pd.DataFrame
         )
         st.plotly_chart(fig, key=f"refstrip_{pid}", width="stretch")
         st.caption(
-            f"Body = {len(peers)} referenčních pacientů (jeden bod = jeden pacient). Šedé pásmo = kvartily "
-            "reference (rozložení pozorovaných hodnot, ne predikční interval)."
+            f"Body = {len(peers)} {peer_word} (jeden bod = jeden pacient). Šedé pásmo = kvartily "
+            "(rozložení pozorovaných hodnot, ne predikční interval)."
         )
 
     st.markdown("##### B. Co vyvolává označení")
@@ -437,7 +460,12 @@ def _tab_explanation(pid, g: GlobalResults, a: AnalysisResult, res: pd.DataFrame
     cat, num = descriptor_columns(g.extra_meta)
     cat = [c for c in cat if c not in ("dx_icd10", "dx_group_label")]  # u peerů dané výběrem reference
     if peers:
-        comp, comp_label = peers, f"pacienti použití pro očekávání ({len(peers)})"
+        comp = peers
+        comp_label = (
+            f"pacienti se stejnou diagnostickou kategorií ({len(peers)})"
+            if is_model
+            else f"pacienti použití pro očekávání ({len(peers)})"
+        )
     else:
         comp = [p for p in g.core["patient_id"] if p != pid]
         comp_label = f"celá kohorta ({len(comp)}) – srovnatelná reference neexistuje"

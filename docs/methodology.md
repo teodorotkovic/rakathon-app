@@ -91,6 +91,20 @@ Malá kohorta; hranice reference a práh jsou heuristiky; anonymizační posun �
 ale ovlivňuje mezery mezi epizodami – proto readmise nejsou ukazatelem); laboratorní meze mohou být dospělé;
 úplnost sledování neznámá; kratší pobyt ≠ lepší průběh; žádná kauzální interpretace.
 
-## 8. Volitelná rozšíření (neimplementováno)
-Ridge nad `log1p` s LOO/OOF a rozkladem příspěvků stejného fitu, Isolation Forest nad rezidui, PCA – viz
-`docs/TASKS.md`.
+## 8. Volitelná druhá baseline: Ridge s leave-one-patient-out (implementováno)
+Volba „Metoda očekávání“ v *Globální očekávání (pokročilé)* (`BaselineConfig.method = "ridge_loo"`,
+`ridge_alpha = 1.0`). Model: `Ridge` nad `y = log1p(ukazatel)` se vstupy diagnostická kategorie (orientační
+skupina; u nezařazených diagnóz přesný kód), věková skupina, pohlaví – one-hot encoding s `handle_unknown="ignore"`.
+
+- Pro každého pacienta se encoder i model fitují **jen na ostatních pacientech** (LOO); vlastní výsledek ani
+  stav úmrtí ani laboratoře nejsou vstupem (test `test_ridge_loo_own_outcome_does_not_change_expectation`).
+- Očekávání = `expm1(predikce)` = **modelové typické očekávání** (v log1p škále, ne aritmetický průměr dní).
+  Záporná predikce v log škále by se ořízla na 0 a byla by uvedena v důvodu.
+- Rozklad: `predikce = základ + Σ příspěvků faktorů` ze **stejného LOO fitu**; zobrazen v detailu jako
+  tabulka (log1p příspěvek a násobek `1 + délka`), test `test_ridge_decomposition_matches_prediction`.
+- Opora: počet jiných pacientů ve stejné diagnostické kategorii; ≥ 8 ok, 4–7 omezená, < 4 očekávání se nevydá
+  (model by vycházel jen z věku a pohlaví). Nevídaná hodnota faktoru má nulový příspěvek a je uvedena.
+- Popisné LOO chyby (obě metody) jsou v postranním panelu: na skutečných datech medián |rozdílu| hlavního
+  ukazatele 1,25 dne (peer medián) vs. 1,13 dne (Ridge), 107/157 hodnoceno. Nejde o klinickou validaci.
+
+Neimplementováno: Isolation Forest nad rezidui, bootstrap stability, PCA – viz `docs/TASKS.md`.

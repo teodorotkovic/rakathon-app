@@ -91,6 +91,7 @@ def patient_results_table(g: GlobalResults, patient_ids: list[str]) -> pd.DataFr
         "ref_min",
         "ref_max",
         "population_median",
+        "model_detail",
         "dataset_fingerprint",
         "source_mode",
         "baseline_config_id",

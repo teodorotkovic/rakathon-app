@@ -9,7 +9,8 @@ app.py ─┬─ ui/sidebar.py ──┐
                          pipeline.py  (compute_global, compute_analysis – čisté funkce)
               ┌────────────────┼─────────────────────────┬──────────────────┐
         data/ (io, validation,  features/ (catalog,       models/ (base,     analysis/ (residuals, detectors,
-        normalization, dataset, episodes, laboratories,   peer_median)       clustering, similarity,
+        normalization, dataset, episodes, laboratories,   peer_median,       clustering, similarity,
+                                                          regression)
         demo)                   patient_table, extra)                        explanations)
                                │
                          storage/ (csv_store, exports, base)       domain.py, configuration.py, formatting.py

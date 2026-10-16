@@ -19,6 +19,7 @@ DEFAULTS_PATH = PROJECT_ROOT / "config" / "defaults.json"
 VALID_SOURCES = ("auto", "real", "synthetic")
 VALID_EPISODE_RULES = ("exact_dx_match", "group_dx_match", "from_anchor_all_inpatient")
 VALID_SCALES = ("log", "raw")
+VALID_BASELINE_METHODS = ("peer_median", "ridge_loo")
 
 
 class ConfigError(ValueError):
@@ -130,8 +131,10 @@ def default_analysis_config(settings: AppSettings) -> AnalysisConfig:
 
 
 def validate_baseline_config(cfg: BaselineConfig) -> None:
-    if cfg.method != "peer_median":
+    if cfg.method not in VALID_BASELINE_METHODS:
         raise ConfigError(f"Neznámá metoda baseline: {cfg.method}")
+    if cfg.ridge_alpha <= 0:
+        raise ConfigError("ridge_alpha musí být kladné.")
     if cfg.episode_rule not in VALID_EPISODE_RULES:
         raise ConfigError(f"Neznámé pravidlo výběru epizod: {cfg.episode_rule}")
     if cfg.min_limited_reference < 1 or cfg.min_reference < cfg.min_limited_reference:

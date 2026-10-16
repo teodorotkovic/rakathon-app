@@ -28,7 +28,7 @@ Není to ověřené klinické skóre ani doporučení léčby. Nízká zaznamena
 | `src/rakathon/domain.py` | společné kontrakty (dataclasses, enumy, verze, hash konfigurace) |
 | `src/rakathon/data/` | čtení CSV, validace, normalizace, syntetické demo |
 | `src/rakathon/features/` | katalog vlastností/výsledků, epizody, laboratoře, pacientská tabulka, doplňkové vlastnosti |
-| `src/rakathon/models/` | protokol baseline + `PeerMedianBaseline` (LOO) |
+| `src/rakathon/models/` | protokol baseline + `PeerMedianBaseline` (výchozí, LOO) + `RidgeLooBaseline` (volitelná, LOO) |
 | `src/rakathon/analysis/` | rezidua, detektor, shlukování outlierů, podobnost, vysvětlení |
 | `src/rakathon/pipeline.py` | čisté služby `compute_global` / `compute_analysis` |
 | `src/rakathon/storage/` | CSV úložiště posouzení/pohledů/doplňků, exporty |

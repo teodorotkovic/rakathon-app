@@ -237,6 +237,7 @@ class BaselineConfig:
     excluded_patient_ids: tuple[str, ...] = ()
     exclusion_reasons: tuple[tuple[str, str], ...] = ()
     seed: int = 0
+    ridge_alpha: float = 1.0  # jen pro method="ridge_loo"
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -260,6 +261,7 @@ class BaselineConfig:
             excluded_patient_ids=tuple(sorted(d.get("excluded_patient_ids", ()))),
             exclusion_reasons=tuple(sorted(tuple(p) for p in d.get("exclusion_reasons", ()))),
             seed=int(d.get("seed", 0)),
+            ridge_alpha=float(d.get("ridge_alpha", 1.0)),
         )
 
     @property

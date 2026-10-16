@@ -55,6 +55,26 @@ def run_environment() -> dict[str, str]:
     return env
 
 
+def oof_summary(results: pd.DataFrame) -> list[dict]:
+    """Popisné out-of-fold (LOO) chyby a pokrytí po ukazatelích – ne klinická validace."""
+    out = []
+    for metric, sub in results.groupby("metric_id", sort=False):
+        ev = sub[sub["evaluable"]]
+        out.append(
+            {
+                "metric_id": metric,
+                "n_patients": int(len(sub)),
+                "n_evaluable": int(len(ev)),
+                "coverage": float(len(ev) / len(sub)) if len(sub) else 0.0,
+                "median_abs_residual_days": float(ev["residual"].abs().median()) if len(ev) else float("nan"),
+                "median_abs_log_residual": float(ev["log_residual"].abs().median())
+                if len(ev)
+                else float("nan"),
+            }
+        )
+    return out
+
+
 @dataclass
 class GlobalResults:
     dataset_fingerprint: str
@@ -106,6 +126,7 @@ def compute_global(bundle: DatasetBundle, config: BaselineConfig, dxmap: Diagnos
             "method_version": METHOD_VERSION,
             "environment": run_environment(),
             "n_patients": int(len(core)),
+            "oof_summary": oof_summary(results),
         },
     )
     specs = {m: outcome_spec(m, config.episode_rule) for m in config.outcomes}
