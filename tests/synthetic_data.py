@@ -1,4 +1,6 @@
-"""Generátor nezávisle vymyšlených syntetických dat pro demo a testy.
+"""Generátor nezávisle vymyšlených syntetických dat – POUZE pro automatické testy.
+
+Aplikace syntetická data nepoužívá ani negeneruje.
 
 Data nejsou odvozena ze skutečných pacientských řádků. Generátor má pevný seed a
 vytváří konzistentní tři tabulky s různými diagnózami, běžnými i neobvyklými

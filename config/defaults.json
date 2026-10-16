@@ -1,11 +1,10 @@
 {
-  "_notes": "Výchozí konfigurace. Cesty jsou relativní ke kořeni repozitáře; přepis přes RAKATHON_DATA_DIR / RAKATHON_RUNTIME_DIR / RAKATHON_SOURCE. Číselné hranice nejsou klinicky validované – viz docs/methodology.md.",
+  "_notes": "Výchozí konfigurace. Cesty jsou relativní ke kořeni repozitáře; přepis přes RAKATHON_DATA_DIR / RAKATHON_RUNTIME_DIR. Číselné hranice nejsou klinicky validované – viz docs/methodology.md.",
   "paths": {
     "data_dir": "data",
     "runtime_dir": "runtime",
     "diagnosis_map": "config/diagnosis_groups.csv"
   },
-  "source": "auto",
   "baseline": {
     "method": "peer_median",
     "episode_rule": "exact_dx_match",

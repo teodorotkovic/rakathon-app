@@ -11,7 +11,7 @@ from builders import EpisodeBuilder, build_bundle, cohort
 from rakathon.analysis.detectors import robust_scale, run_robust_detector
 from rakathon.configuration import load_diagnosis_map, load_settings
 from rakathon.data.dataset import prepare_dataset
-from rakathon.data.demo import generate_synthetic
+from synthetic_data import generate_synthetic
 from rakathon.domain import AnalysisConfig, BaselineConfig, SourceMode
 from rakathon.pipeline import compute_analysis, compute_global
 
@@ -94,7 +94,7 @@ def test_direction_comes_from_raw_residual_not_local_z():
 def synthetic_global():
     s = load_settings()
     dx = load_diagnosis_map(s.diagnosis_map_path)
-    bundle, _ = prepare_dataset(generate_synthetic().files, SourceMode.SYNTHETIC, "demo", dx)
+    bundle, _ = prepare_dataset(generate_synthetic().files, SourceMode.REAL, "demo", dx)
     cfg = BaselineConfig(diagnosis_map_version=dx.version, diagnosis_map_hash=dx.content_hash)
     return compute_global(bundle, cfg, dx), bundle, cfg, dx
 

@@ -8,7 +8,7 @@ import pytest
 
 from rakathon.configuration import load_diagnosis_map, load_settings
 from rakathon.data.dataset import prepare_dataset
-from rakathon.data.demo import generate_synthetic
+from synthetic_data import generate_synthetic
 from rakathon.domain import AnalysisConfig, BaselineConfig, ReviewStatus, SourceMode
 from rakathon.pipeline import compute_analysis, compute_global
 from rakathon.storage import exports
@@ -22,7 +22,7 @@ def _review(
 ):
     return make_review(
         dataset_fingerprint=fp,
-        source_mode="synthetic",
+        source_mode="real",
         patient_id=pid,
         baseline_config_id=baseline,
         analysis_id="A-1",
@@ -36,8 +36,8 @@ def _review(
 
 def test_review_roundtrip_preserves_text_and_survives_restart(tmp_path):
     fp = "f" * 64
-    CsvStore(tmp_path, "synthetic", fp).append_review(_review(fp))
-    reloaded = CsvStore(tmp_path, "synthetic", fp).load_reviews()  # nová instance = „restart“
+    CsvStore(tmp_path, "real", fp).append_review(_review(fp))
+    reloaded = CsvStore(tmp_path, "real", fp).load_reviews()  # nová instance = „restart“
     assert len(reloaded) == 1
     assert reloaded.at[0, "comment"] == TRICKY
     assert reloaded.at[0, "reviewer"] == "Dr. Ž"
@@ -45,7 +45,7 @@ def test_review_roundtrip_preserves_text_and_survives_restart(tmp_path):
 
 def test_latest_review_wins_and_history_is_kept(tmp_path):
     fp = "a" * 64
-    store = CsvStore(tmp_path, "synthetic", fp)
+    store = CsvStore(tmp_path, "real", fp)
     first = _review(fp, comment="první")
     store.append_review(first)
     store.append_review(
@@ -61,21 +61,16 @@ def test_latest_review_wins_and_history_is_kept(tmp_path):
 
 def test_review_from_other_dataset_or_context_is_not_current(tmp_path):
     fp_a, fp_b = "a" * 64, "b" * 64
-    CsvStore(tmp_path, "synthetic", fp_a).append_review(_review(fp_a))
+    CsvStore(tmp_path, "real", fp_a).append_review(_review(fp_a))
     # jiný dataset: jiný adresář, žádné zděděné posouzení pro stejné ID
-    assert CsvStore(tmp_path, "synthetic", fp_b).load_reviews().empty
+    assert CsvStore(tmp_path, "real", fp_b).load_reviews().empty
     # jiný globální kontext ve stejném datasetu: jen historie
-    reviews = CsvStore(tmp_path, "synthetic", fp_a).load_reviews()
+    reviews = CsvStore(tmp_path, "real", fp_a).load_reviews()
     assert current_reviews(reviews, fp_a, "B-other").empty
     hist, other = split_history(reviews, "P0001", fp_a, "B-other")
     assert hist.empty and len(other) == 1
     with pytest.raises(ValueError):
-        CsvStore(tmp_path, "synthetic", fp_b).append_review(_review(fp_a))
-
-
-def test_real_and_synthetic_storage_are_separated(tmp_path):
-    fp = "c" * 64
-    assert CsvStore(tmp_path, "real", fp).dir != CsvStore(tmp_path, "synthetic", fp).dir
+        CsvStore(tmp_path, "real", fp_b).append_review(_review(fp_a))
 
 
 def test_excel_safe_only_touches_text_columns():
@@ -93,7 +88,7 @@ def test_excel_safe_only_touches_text_columns():
 def synthetic():
     s = load_settings()
     dx = load_diagnosis_map(s.diagnosis_map_path)
-    bundle, _ = prepare_dataset(generate_synthetic().files, SourceMode.SYNTHETIC, "demo", dx)
+    bundle, _ = prepare_dataset(generate_synthetic().files, SourceMode.REAL, "demo", dx)
     g = compute_global(
         bundle, BaselineConfig(diagnosis_map_version=dx.version, diagnosis_map_hash=dx.content_hash), dx
     )
@@ -104,7 +99,7 @@ def test_export_contains_exactly_selected_patients_in_order_with_config(syntheti
     g, a = synthetic
     ids = a.scores.sort_values("score", ascending=False)["patient_id"].tolist()[:7][::-1]
     fp = g.dataset_fingerprint
-    store = CsvStore(tmp_path, "synthetic", fp)
+    store = CsvStore(tmp_path, "real", fp)
     store.append_review(_review(fp, pid=ids[0], baseline=g.baseline_config_id))
     reviews = store.load_reviews()
     cur = current_reviews(reviews, fp, g.baseline_config_id)

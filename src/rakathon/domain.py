@@ -25,7 +25,6 @@ APP_VERSION = __version__
 
 class SourceMode(StrEnum):
     REAL = "real"
-    SYNTHETIC = "synthetic"
 
 
 class Severity(StrEnum):

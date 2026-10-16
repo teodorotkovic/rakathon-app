@@ -51,7 +51,6 @@ def _reset_widgets() -> None:
 def render() -> None:
     st.title("Analýza odchylek")
     state.show_flash()
-    components.source_banner()
     g = state.global_results()
     _controls(g)
     a = state.local_analysis()

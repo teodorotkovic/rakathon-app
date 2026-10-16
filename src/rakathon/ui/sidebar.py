@@ -29,6 +29,7 @@ SEVERITY_LABELS = {"blocking": "Blokující", "warning": "Upozornění", "info":
 def render() -> None:
     with st.sidebar:
         _dataset_box()
+        _import_box()
         _global_settings()
         _extra_features()
         _data_locations()
@@ -52,10 +53,7 @@ def _report_table(report: ValidationReport) -> pd.DataFrame:
 
 def _dataset_box() -> None:
     b = state.dataset()
-    if b.source_mode == SourceMode.SYNTHETIC:
-        st.warning("**Syntetická demonstrační data**", icon=":material/science:")
-    else:
-        st.success("**Skutečná data** (lokálně)", icon=":material/lock:")
+    st.success("**Skutečná data** (lokálně)", icon=":material/lock:")
     n_pat = b.patients["patient_id"].nunique()
     st.caption(
         f"{b.source_label} · otisk `{b.short_fingerprint}`  \n"
@@ -74,15 +72,16 @@ def _dataset_box() -> None:
             key="dl_quality",
         )
 
-    with st.expander("Zdroj dat / import"):
+
+def _import_box(expanded: bool = False) -> None:
+    with st.expander("Zdroj dat / import", expanded=expanded):
         failed = st.session_state.get(state.K_IMPORT_REPORT)
         if failed is not None:
             st.error("Poslední import neprošel validací – aktivní zůstává původní dataset.")
             st.dataframe(_report_table(failed), hide_index=True, width="stretch", height=200)
         s = state.settings()
         st.caption(f"Lokální adresář: `{s.data_dir}`")
-        c1, c2 = st.columns(2)
-        if c1.button("Načíst lokální data", key="btn_load_local", width="stretch"):
+        if st.button("Načíst lokální data", key="btn_load_local", width="stretch"):
             ok, rep = state.load_local_dir()
             state.flash(
                 "success" if ok else "error",
@@ -90,10 +89,6 @@ def _dataset_box() -> None:
                 if ok
                 else f"Lokální data nelze použít: {rep if isinstance(rep, str) else 'validace selhala'}",
             )
-            st.rerun()
-        if c2.button("Syntetická data", key="btn_load_synth", width="stretch"):
-            state.load_synthetic()
-            state.flash("info", "Načtena syntetická demonstrační data.")
             st.rerun()
         uploads = st.file_uploader(
             "Nahrát patients.csv, episodes.csv, labs.csv (najednou)",
@@ -112,6 +107,19 @@ def _dataset_box() -> None:
                     "Nahraný dataset ověřen a aktivován." if ok else "Nahraný dataset neprošel validací.",
                 )
                 st.rerun()
+
+
+def render_no_data() -> None:
+    """Obrazovka bez aktivního datasetu: syntetická data aplikace nepoužívá."""
+    s = state.settings()
+    st.title("Chybí data")
+    state.show_flash()
+    st.error(
+        f"V adresáři `{s.data_dir}` nebyla nalezena platná data (`patients.csv`, `episodes.csv`, `labs.csv`). "
+        "Zkopírujte je tam a klikněte na *Načíst lokální data*, nebo je nahrajte níže.",
+        icon=":material/folder_off:",
+    )
+    _import_box(expanded=True)
 
 
 def _global_settings() -> None:

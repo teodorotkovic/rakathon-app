@@ -4,7 +4,7 @@ Aktualizováno: 2026-10-17 (noc), větev `main`, lokální commity M0–M4, nic 
 
 ## Co funguje
 - Import skutečných dat z `data/` i nahráním v UI, validace (blokující/neblokující), content fingerprint,
-  syntetické demo s výrazným označením.
+  syntetický režim odstraněn – aplikace pracuje jen se skutečnými daty.
 - Pacientská tabulka (1 řádek/pacient), ukazatele `median_los_dx` / `max_los_dx`, tři pravidla výběru pobytů.
 - `PeerMedianBaseline` s hierarchií reference a LOO; rezidua v dnech i log škále.
 - Robustní lokální detektor (MAD → IQR → nestandardizovatelné), pásma, opora, citlivost prahu, kontrafaktuál.

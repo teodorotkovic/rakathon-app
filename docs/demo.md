@@ -1,14 +1,14 @@
 # Demo scénář (3–5 min)
 
-Pro veřejné předvedení používejte **syntetická data** (`RAKATHON_SOURCE=synthetic` nebo tlačítko *Syntetická
-data*). Skutečná data ukazujte jen týmu a mentorům lokálně; nedělejte z nich snímky obrazovky do veřejných slajdů.
+Aplikace pracuje jen se skutečnými daty z `data/` (syntetický režim byl odstraněn). Skutečná data ukazujte jen
+týmu a mentorům lokálně; nedělejte z nich snímky obrazovky do veřejných slajdů.
 
 ```powershell
-$env:RAKATHON_SOURCE = "synthetic"; python -m uv run streamlit run app.py --server.address 127.0.0.1
+python -m uv run streamlit run app.py --server.address 127.0.0.1
 ```
 
 ## Průchod
-1. **Případ (Pacienti, 45 s).** Banner „Syntetická demonstrační data“. Ukázat metriky (hodnoceno / nad prahem /
+1. **Případ (Pacienti, 45 s).** Ukázat metriky (hodnoceno / nad prahem /
    omezená opora / nelze posoudit) a seřazený seznam. Rozbalit „Jak číst tento přehled“.
 2. **Vysvětlení (60 s).** Kliknout na první řádek. A: „Očekávání 5 dní = medián 19 pacientů se stejnou diagnózou…
    věk a pohlaví nejsou zohledněny“. Graf reference. B: rozdíl, standardizovaná odchylka, citlivost prahu,

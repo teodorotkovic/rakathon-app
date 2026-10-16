@@ -26,7 +26,7 @@ Není to ověřené klinické skóre ani doporučení léčby. Nízká zaznamena
 | `views/` | tenké obálky stránek (kvůli `AppTest.switch_page`) |
 | `config/` | `defaults.json` (parametry), `diagnosis_groups.csv` (verzovaná orientační mapa) |
 | `src/rakathon/domain.py` | společné kontrakty (dataclasses, enumy, verze, hash konfigurace) |
-| `src/rakathon/data/` | čtení CSV, validace, normalizace, syntetické demo |
+| `src/rakathon/data/` | čtení CSV, validace, normalizace |
 | `src/rakathon/features/` | katalog vlastností/výsledků, epizody, laboratoře, pacientská tabulka, doplňkové vlastnosti |
 | `src/rakathon/models/` | protokol baseline + `PeerMedianBaseline` (výchozí, LOO) + `RidgeLooBaseline` (volitelná, LOO) |
 | `src/rakathon/analysis/` | rezidua, detektor, shlukování outlierů, podobnost, vysvětlení |
@@ -34,7 +34,7 @@ Není to ověřené klinické skóre ani doporučení léčby. Nízká zaznamena
 | `src/rakathon/storage/` | CSV úložiště posouzení/pohledů/doplňků, exporty |
 | `src/rakathon/ui/` | Streamlit stav, komponenty, grafy, stránky |
 | `scripts/` | profil dat, generátor dema, kontrola skutečných dat |
-| `tests/` | pytest + AppTest; jen malé syntetické fixtures |
+| `tests/` | pytest + AppTest; jen malé syntetické fixtures (generátor v `tests/synthetic_data.py`, aplikace ho nepoužívá) |
 | `docs/` | produkt, architektura, datový slovník, metodika, matice požadavků, demo, otázky, stav, úkoly, rozhodnutí |
 | `data/` | **skutečná data – ignorováno Gitem** |
 | `runtime/` | **lokální anotace, pohledy, profily, exporty – ignorováno Gitem** |
@@ -48,8 +48,8 @@ python -m uv run pytest                        # testy
 python -m uv run ruff check . ; python -m uv run ruff format --check .   # lint
 python -m uv run python scripts/check_real_data.py   # lokální kontrola na skutečných datech
 ```
-Proměnné: `RAKATHON_DATA_DIR` (výchozí `data`), `RAKATHON_RUNTIME_DIR` (výchozí `runtime`),
-`RAKATHON_SOURCE` = `auto|real|synthetic`.
+Proměnné: `RAKATHON_DATA_DIR` (výchozí `data`), `RAKATHON_RUNTIME_DIR` (výchozí `runtime`). Aplikace pracuje jen se skutečnými daty
+(bez syntetického režimu).
 
 ## 4. Co si přečíst před změnou
 `README.md`, `docs/architecture.md`, `docs/methodology.md`, `docs/STATUS.md`, `docs/TASKS.md` a dotčené moduly.

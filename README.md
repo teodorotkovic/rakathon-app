@@ -30,14 +30,13 @@ Po instalaci závislostí nepotřebuje síť.
   Složka je ignorovaná Gitem. Jinou cestu nastavíte proměnnou `RAKATHON_DATA_DIR`.
 - **Nahrání v UI:** postranní panel → *Zdroj dat / import* → nahrát všechny tři CSV najednou → *Ověřit a aktivovat*.
   Import je jeden validovaný krok; při blokující chybě zůstává aktivní původní dataset.
-- **Syntetická demonstrační data** (pevný seed) se načtou tlačítkem *Syntetická data* nebo automaticky, pokud
-  skutečná data chybí. Celá aplikace je pak výrazně označena „Syntetická demonstrační data“.
-  `RAKATHON_SOURCE=auto|real|synthetic` určuje výchozí zdroj.
+- Aplikace pracuje **jen se skutečnými daty**. Pokud v `data/` chybí nebo neprojdou validací, zobrazí se
+  obrazovka „Chybí data“ s importem; syntetická data se negenerují ani nenačítají.
 - **Doplňkové vlastnosti:** postranní panel → *Doplňkové vlastnosti pacientů* → `extra_features.csv`
   (`patient_id` + nové sloupce). Jsou jen popisné (detail, filtry, popis skupin), nevstupují do očekávání.
 
 ## Ukládání a export
-- Posouzení, uložené pohledy a doplňkové vlastnosti se ukládají do `runtime/<real|synthetic>/<otisk datasetu>/`
+- Posouzení, uložené pohledy a doplňkové vlastnosti se ukládají do `runtime/real/<otisk datasetu>/`
   (CSV/JSON, ignorováno Gitem). Posouzení je svázané s otiskem datasetu a globální konfigurací; při změně
   dat nebo cíle se staré posouzení zobrazí jen jako historie.
 - Export (tlačítko na obou stránkách) = ZIP s `patient_results.csv`, `analysis_results.csv`, `reviews.csv`,
@@ -51,7 +50,6 @@ python -m uv run pytest                                  # 35 testů vč. AppTes
 python -m uv run ruff check . ; python -m uv run ruff format --check .
 python -m uv run python scripts/check_real_data.py       # strukturální kontrola na skutečných datech (bez výpisu pacientů)
 python -m uv run python scripts/profile_data.py          # profil dat do runtime/profile/
-python -m uv run python scripts/generate_demo.py         # syntetická CSV do runtime/synthetic_demo/
 ```
 
 ## Známé limity (výběr)

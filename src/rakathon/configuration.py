@@ -16,7 +16,6 @@ from rakathon.domain import AnalysisConfig, BaselineConfig
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULTS_PATH = PROJECT_ROOT / "config" / "defaults.json"
 
-VALID_SOURCES = ("auto", "real", "synthetic")
 VALID_EPISODE_RULES = ("exact_dx_match", "group_dx_match", "from_anchor_all_inpatient")
 VALID_SCALES = ("log", "raw")
 VALID_BASELINE_METHODS = ("peer_median", "ridge_loo")
@@ -31,7 +30,6 @@ class AppSettings:
     data_dir: Path
     runtime_dir: Path
     diagnosis_map_path: Path
-    source: str  # auto | real | synthetic
     defaults: dict[str, Any]
 
 
@@ -51,10 +49,7 @@ def load_settings(path: Path = DEFAULTS_PATH) -> AppSettings:
     data_dir = _resolve(os.environ.get("RAKATHON_DATA_DIR", paths.get("data_dir", "data")))
     runtime_dir = _resolve(os.environ.get("RAKATHON_RUNTIME_DIR", paths.get("runtime_dir", "runtime")))
     dxmap = _resolve(paths.get("diagnosis_map", "config/diagnosis_groups.csv"))
-    source = os.environ.get("RAKATHON_SOURCE", defaults.get("source", "auto"))
-    if source not in VALID_SOURCES:
-        raise ConfigError(f"Neplatný zdroj dat '{source}', povoleno: {VALID_SOURCES}")
-    return AppSettings(data_dir, runtime_dir, dxmap, source, defaults)
+    return AppSettings(data_dir, runtime_dir, dxmap, defaults)
 
 
 # ---------------------------------------------------------------------------

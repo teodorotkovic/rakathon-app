@@ -92,7 +92,7 @@ def to_files(patients: list[dict], episodes: list[dict], labs: list[dict]) -> di
     }
 
 
-def build_bundle(patients, episodes, labs, dxmap, mode=SourceMode.SYNTHETIC) -> DatasetBundle:
+def build_bundle(patients, episodes, labs, dxmap, mode=SourceMode.REAL) -> DatasetBundle:
     bundle, report = prepare_dataset(to_files(patients, episodes, labs), mode, "test", dxmap)
     assert bundle is not None, report.to_frame().to_string()
     return bundle

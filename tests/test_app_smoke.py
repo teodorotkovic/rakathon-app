@@ -1,4 +1,4 @@
-"""UI smoke průchod přes Streamlit AppTest na syntetických datech.
+"""UI smoke průchod přes Streamlit AppTest (syntetická CSV podstrčená jako lokální adresář dat).
 
 Ověřuje: otevření aplikace → detail pacienta → uložení posouzení → přechod do analýzy →
 změna ukazatelů a prahu → návrat do detailu → posouzení přežije nový běh.
@@ -11,15 +11,22 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
+from rakathon.data.io import TABLE_FILES
 from rakathon.storage.csv_store import CsvStore
+from synthetic_data import generate_synthetic
 
 APP = Path(__file__).resolve().parents[1] / "app.py"
 
 
 @pytest.fixture
 def app(tmp_path, monkeypatch):
-    monkeypatch.setenv("RAKATHON_SOURCE", "synthetic")
-    monkeypatch.setenv("RAKATHON_RUNTIME_DIR", str(tmp_path))
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    for name, content in generate_synthetic().files.items():
+        (data_dir / TABLE_FILES[name]).write_bytes(content)
+    runtime = tmp_path / "runtime"
+    monkeypatch.setenv("RAKATHON_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("RAKATHON_RUNTIME_DIR", str(runtime))
     st.cache_data.clear()
     st.cache_resource.clear()
     at = AppTest.from_file(str(APP), default_timeout=180)
@@ -35,7 +42,7 @@ def _button(at, label):
 def test_full_doctor_flow(app, tmp_path):
     at = app
     assert at.title[0].value == "Pacienti"
-    assert any("Syntetická demonstrační data" in w.value for w in at.warning)
+    assert not any("Syntetick" in w.value for w in at.warning)
     hodnoceno = next(m for m in at.metric if m.label == "Hodnoceno")
     assert "/" in hodnoceno.value
 
@@ -70,12 +77,13 @@ def test_full_doctor_flow(app, tmp_path):
     assert at.subheader[0].value == f"Pacient {pid}"
     assert any("Z pohledu" in c.value for c in at.caption)  # lokální skóre označené názvem pohledu
 
-    stores = list(tmp_path.glob("synthetic/*/reviews.csv"))
+    runtime = tmp_path / "runtime"
+    stores = list(runtime.glob("real/*/reviews.csv"))
     assert len(stores) == 1
     fp_dir = stores[0].parent
     reviews = CsvStore(
-        tmp_path,
-        "synthetic",
+        runtime,
+        "real",
         (fp_dir / "dataset.json")
         .read_text(encoding="utf-8")
         .split('"dataset_fingerprint": "')[1]
@@ -113,3 +121,15 @@ def test_reset_view_restores_defaults(app):
     _button(at, "Výchozí pohled").click().run()
     assert not at.exception, [e.value for e in at.exception]
     assert at.slider(key="dv_threshold").value == 2.5
+
+
+def test_without_data_shows_error_not_synthetic(tmp_path, monkeypatch):
+    monkeypatch.setenv("RAKATHON_DATA_DIR", str(tmp_path / "missing"))
+    monkeypatch.setenv("RAKATHON_RUNTIME_DIR", str(tmp_path / "runtime"))
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    at = AppTest.from_file(str(APP), default_timeout=60)
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.title[0].value == "Chybí data"
+    assert not any(m.label == "Hodnoceno" for m in at.metric)

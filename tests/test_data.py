@@ -27,7 +27,7 @@ def test_episode_classification_and_length_without_plus_one(dxmap):
     eb.add("P0001", 20, None, "C91")  # bez propuštění
     eb.add("P0001", 30, 28, "C91")  # neplatný interval
     bundle, report = prepare_dataset(
-        to_files([patient("P0001")], eb.rows, []), SourceMode.SYNTHETIC, "t", dxmap
+        to_files([patient("P0001")], eb.rows, []), SourceMode.REAL, "t", dxmap
     )
     assert bundle is not None
     assert bundle.episodes["episode_class"].tolist() == [
@@ -83,13 +83,13 @@ def test_blocking_errors_reject_dataset(dxmap):
     eb = EpisodeBuilder()
     eb.stays("P0001", "C91", [3])
     dup = eb.rows + [dict(eb.rows[0])]
-    bundle, report = prepare_dataset(to_files([patient("P0001")], dup, []), SourceMode.SYNTHETIC, "t", dxmap)
+    bundle, report = prepare_dataset(to_files([patient("P0001")], dup, []), SourceMode.REAL, "t", dxmap)
     assert bundle is None
     assert any(i.code == "duplicate_key" and i.severity == Severity.BLOCKING for i in report.issues)
 
     files = to_files([patient("P0001")], eb.rows, [])
     files["patients"] = b"patient_id,sex\nP0001,M\n"
-    bundle, report = prepare_dataset(files, SourceMode.SYNTHETIC, "t", dxmap)
+    bundle, report = prepare_dataset(files, SourceMode.REAL, "t", dxmap)
     assert bundle is None
     assert any(i.code == "missing_columns" for i in report.issues)
 

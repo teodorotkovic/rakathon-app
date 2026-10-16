@@ -26,7 +26,6 @@ from rakathon.configuration import (
     load_settings,
 )
 from rakathon.data.dataset import prepare_dataset
-from rakathon.data.demo import generate_synthetic
 from rakathon.data.io import DatasetFilesMissing, dataset_dir_available, read_dataset_dir
 from rakathon.domain import (
     AnalysisConfig,
@@ -123,11 +122,6 @@ def _attach_saved_extra(bundle: DatasetBundle) -> None:
         bundle.extra, bundle.extra_meta = None, None
 
 
-def load_synthetic() -> tuple[bool, ValidationReport]:
-    syn = generate_synthetic()
-    return activate_files(syn.files, SourceMode.SYNTHETIC, "Syntetická demonstrační data (seed)")
-
-
 def load_local_dir() -> tuple[bool, ValidationReport | str]:
     s = settings()
     try:
@@ -153,18 +147,8 @@ def init() -> None:
     ss = st.session_state
     ss.setdefault(K_NONCE, 0)
     ss.setdefault(K_REVIEWER, "")
-    if K_DATASET not in ss:
-        source = settings().source
-        loaded = False
-        if source in ("auto", "real") and dataset_dir_available(settings().data_dir):
-            loaded, _ = load_local_dir()
-        if not loaded:
-            if source == "real":
-                ss[K_FLASH] = (
-                    "warning",
-                    "Skutečná data nebyla nalezena nebo neprošla validací – načtena syntetická data.",
-                )
-            load_synthetic()
+    if K_DATASET not in ss and dataset_dir_available(settings().data_dir):
+        load_local_dir()
     ss.setdefault(K_BASELINE, default_baseline_config(settings(), dxmap()))
     ss.setdefault(K_ANALYSIS, default_analysis_config(settings()))
     ss.setdefault(K_SELECTED, None)
@@ -172,6 +156,10 @@ def init() -> None:
     ss.setdefault(K_INVESTIGATED, [])
     ss.setdefault(K_FOCUS, None)
     ss.setdefault(K_PENDING_EXCL, {})
+
+
+def has_dataset() -> bool:
+    return st.session_state.get(K_DATASET) is not None
 
 
 def dataset() -> DatasetBundle:

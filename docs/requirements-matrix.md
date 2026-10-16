@@ -24,7 +24,7 @@ Stav k 2026-10-17. „Hotovo“ = funkční chování ověřené uvedeným způs
 |---|---|---|---|
 | Validovaný import z adresáře i uploadu, blokující vs. neblokující | `data/validation.py`, `data/dataset.py`, sidebar | `test_blocking_errors_reject_dataset` | hotovo |
 | Content fingerprint, oddělení anotací | `data/io.fingerprint_files`, `CsvStore` | `test_fingerprint_depends_on_content`, `test_review_from_other_dataset_or_context_is_not_current` | hotovo |
-| Syntetické demo oddělené a označené | `data/demo.py`, banner + badge | AppTest (banner), `test_real_and_synthetic_storage_are_separated` | hotovo |
+| Bez syntetického režimu – jen skutečná data | `ui/state.py`, obrazovka „Chybí data“ | AppTest `test_without_data_shows_error_not_synthetic` | hotovo |
 | Nová popisná vlastnost bez přepisu UI | `features/extra.py`, sidebar, detail, filtry, popis skupin | `test_extra.py` | hotovo |
 | Ochrana proti vzorcům v exportu | `exports.excel_safe` | `test_excel_safe_only_touches_text_columns` | hotovo |
 | Tři množiny pacientů oddělené | `ui/state.py`, `ui/deviations.py` | `test_local_analysis_never_changes_global_baseline` | hotovo |

@@ -1,7 +1,7 @@
 """Lokální CSV úložiště posouzení, uložených pohledů a doplňkových vlastností.
 
-Adresář: <runtime>/<source_mode>/<dataset_fingerprint[:16]>/ – skutečná a syntetická
-data jsou oddělena a anotace jsou svázány s obsahem datasetu.
+Adresář: <runtime>/<source_mode>/<dataset_fingerprint[:16]>/ – anotace jsou svázány
+s obsahem datasetu.
 
 Režim souběhu: jeden proces Streamlitu, jeden aktivní zapisující uživatel. Uvnitř
 procesu serializuje read-modify-write zámek na soubor; zápis jde přes dočasný

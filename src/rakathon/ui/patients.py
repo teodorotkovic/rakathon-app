@@ -31,7 +31,6 @@ AGE_ORDER = ["0-5", "6-8", "9-11", "12-14", "15-17", "18-20"]
 def render() -> None:
     st.title("Pacienti")
     state.show_flash()
-    components.source_banner()
     g = state.global_results()
     a = state.default_analysis()
     pid = st.session_state.get(state.K_SELECTED)

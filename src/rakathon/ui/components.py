@@ -10,7 +10,6 @@ from rakathon.domain import (
     REVIEW_LABELS,
     BaselineStatus,
     ReviewStatus,
-    SourceMode,
     review_label,
 )
 from rakathon.formatting import fmt_days
@@ -20,21 +19,12 @@ from rakathon.ui import state
 from rakathon.ui.charts import DIR_TEXT
 
 
-def source_banner() -> None:
-    b = state.dataset()
-    if b.source_mode == SourceMode.SYNTHETIC:
-        st.warning(
-            "**Syntetická demonstrační data** – nejde o skutečné pacienty ani o analýzu reálné kohorty.",
-            icon=":material/science:",
-        )
-
-
 def context_caption(g: GlobalResults, analysis_label: str | None = None) -> None:
     rule = g.baseline.config.episode_rule
     from rakathon.features.catalog import EPISODE_RULES
 
     parts = [
-        f"Dataset `{g.dataset_fingerprint[:12]}` ({'syntetický' if g.source_mode == SourceMode.SYNTHETIC else 'skutečný'})",
+        f"Dataset `{g.dataset_fingerprint[:12]}`",
         f"globální očekávání `{g.baseline_config_id}` – {EPISODE_RULES[rule]['label'].lower()}",
     ]
     if analysis_label:
