@@ -1,0 +1,15 @@
+code,group_id,group_label,note,map_version
+C91,lymphoid_leukaemia,Lymfoidní leukémie,,dxmap-v1
+C92,myeloid_leukaemia,Myeloidní leukémie,,dxmap-v1
+C81,hodgkin_lymphoma,Hodgkinův lymfom,,dxmap-v1
+C82,non_hodgkin_lymphoma,Non-Hodgkinské lymfomy (C82–C85),Heterogenní skupina; MKN-10 C82–C85 jsou podle definice NHL.,dxmap-v1
+C83,non_hodgkin_lymphoma,Non-Hodgkinské lymfomy (C82–C85),Heterogenní skupina; MKN-10 C82–C85 jsou podle definice NHL.,dxmap-v1
+C84,non_hodgkin_lymphoma,Non-Hodgkinské lymfomy (C82–C85),Heterogenní skupina; MKN-10 C82–C85 jsou podle definice NHL.,dxmap-v1
+C85,non_hodgkin_lymphoma,Non-Hodgkinské lymfomy (C82–C85),Heterogenní skupina; MKN-10 C82–C85 jsou podle definice NHL.,dxmap-v1
+C71,cns_tumours,Nádory CNS (různé uvedené chování),"Spojuje C71/C72 (zhoubné) a D43 (nejisté/neznámé chování); vhodnost sloučení ověřit s mentorem.",dxmap-v1
+C72,cns_tumours,Nádory CNS (různé uvedené chování),"Spojuje C71/C72 (zhoubné) a D43 (nejisté/neznámé chování); vhodnost sloučení ověřit s mentorem.",dxmap-v1
+D43,cns_tumours,Nádory CNS (různé uvedené chování),"Spojuje C71/C72 (zhoubné) a D43 (nejisté/neznámé chování); vhodnost sloučení ověřit s mentorem.",dxmap-v1
+C40,bone_tumours,Kostní nádory (C40–C41),,dxmap-v1
+C41,bone_tumours,Kostní nádory (C40–C41),,dxmap-v1
+C49,soft_tissue,Nádory měkkých tkání (C49),,dxmap-v1
+C64,kidney,Nádory ledviny (C64),,dxmap-v1

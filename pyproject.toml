@@ -1,0 +1,39 @@
+[project]
+name = "rakathon"
+version = "0.1.0"
+description = "Interpretovatelná analýza klinických odchylek – Rakathon 2026, výzva dětské onkologie FN Brno"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "streamlit>=1.50",
+    "pandas>=2.2",
+    "numpy>=2.0",
+    "plotly>=6.0",
+    "scikit-learn>=1.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rakathon"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["data", "runtime"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = ["E501"]

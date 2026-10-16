@@ -1,0 +1,37 @@
+{
+  "_notes": "Výchozí konfigurace. Cesty jsou relativní ke kořeni repozitáře; přepis přes RAKATHON_DATA_DIR / RAKATHON_RUNTIME_DIR / RAKATHON_SOURCE. Číselné hranice nejsou klinicky validované – viz docs/methodology.md.",
+  "paths": {
+    "data_dir": "data",
+    "runtime_dir": "runtime",
+    "diagnosis_map": "config/diagnosis_groups.csv"
+  },
+  "source": "auto",
+  "baseline": {
+    "method": "peer_median",
+    "episode_rule": "exact_dx_match",
+    "outcomes": ["median_los_dx", "max_los_dx"],
+    "hierarchy": [
+      ["dx_icd10", "age_group", "sex"],
+      ["dx_icd10", "age_group"],
+      ["dx_icd10"],
+      ["dx_group", "age_group"],
+      ["dx_group"]
+    ],
+    "min_reference": 8,
+    "min_limited_reference": 4,
+    "seed": 0
+  },
+  "analysis": {
+    "metrics": ["median_los_dx"],
+    "scale": "log",
+    "method": "robust_max_z",
+    "threshold": 2.5,
+    "margin": 1.0,
+    "include_limited_reference": true,
+    "sensitivity_thresholds": [2.0, 2.5, 3.0, 3.5],
+    "min_calibration_n": 8,
+    "min_support_stays": 2,
+    "cluster_min_outliers": 4,
+    "cluster_distance_threshold": 2.5
+  }
+}

@@ -1,0 +1,24 @@
+# --- Skutečná pacientská data a odvozené výstupy: NIKDY necommitovat ---
+/data/
+/runtime/
+/*.csv
+/*.zip
+/datapackage.json
+/*.pdf
+/exports/
+
+# --- Python / nástroje ---
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
