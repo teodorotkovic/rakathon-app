@@ -1,9 +1,12 @@
-"""Stránka Analýza odchylek.
+"""Stránka Analýza odchylek – jedna souvislá stránka pro lékaře.
 
-Lokální konfigurace (ukazatele, škála, práh, reference) mění jen tuto analýzu. Globální
+Pořadí odpovídá otázkám lékaře: kolik je neobvyklých pacientů → kde leží a kdo to je →
+proč je konkrétní pacient neobvyklý → co mají neobvyklí pacienti společného → další nástroje.
+
+Lokální konfigurace (ukazatele, škála, hranice, reference) mění jen tuto analýzu. Globální
 očekávání se zde nepřepočítává. Tlačítka mají odlišné role:
-- „Zobrazit vybrané“ → vyšetřovaný výběr (nic nepřepočítává),
-- „Použít jako referenci“ → lokální reference kalibrace detektoru,
+- klik na bod / „Vysvětlit“ → vybraní pacienti (nic nepřepočítává),
+- „Použít jako referenci“ (Další nástroje) → lokální reference kalibrace detektoru,
 - „Výchozí reference“ → všichni hodnotitelní pacienti.
 """
 
@@ -12,9 +15,11 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
+from rakathon.analysis.detectors import robust_scale
 from rakathon.analysis.explanations import explain_flag
 from rakathon.configuration import default_analysis_config
 from rakathon.domain import (
@@ -28,13 +33,22 @@ from rakathon.domain import (
     review_label,
 )
 from rakathon.features.catalog import descriptor_columns
-from rakathon.formatting import fmt_num, fmt_signed_days
+from rakathon.formatting import fmt_num, fmt_pct
 from rakathon.pipeline import GlobalResults
 from rakathon.storage.csv_store import now_iso
 from rakathon.ui import charts, components, state
 from rakathon.ui.patients import _export_button
 
 WIDGET_KEYS = ["dv_metrics", "dv_scale", "dv_threshold", "dv_limited", "dv_cluster_dist", "dv_cluster_min"]
+K_LAST_CHART = "dv_last_chart_selection"
+
+# Krátké názvy ukazatelů pro věty („Typický pobyt: 21 dní místo 5“).
+PLAIN_METRIC = {"median_los_dx": "Typický pobyt", "max_los_dx": "Nejdelší pobyt"}
+BAND_BADGE = {
+    "výrazná odchylka": ("Výrazná odchylka", "orange"),
+    "hraniční odchylka": ("Hraniční odchylka", "orange"),
+    "těsně pod prahem": ("Těsně pod hranicí", "gray"),
+}
 
 
 def _bind(key: str, value) -> None:
@@ -48,38 +62,78 @@ def _reset_widgets() -> None:
     state.bump_nonce()
 
 
-def render() -> None:
-    st.title("Analýza odchylek")
-    state.show_flash()
-    g = state.global_results()
-    _controls(g)
-    a = state.local_analysis()
-    components.context_caption(g, f"lokální pohled `{a.analysis_id}`")
-    _reference_info(g, a)
+def _days(x) -> str:
+    if x is None or pd.isna(x):
+        return "–"
+    n = float(x)
+    if n != int(n):
+        word = "dne"  # desetinné číslo: 7,2 dne
+    else:
+        word = "den" if abs(n) == 1 else ("dny" if 2 <= abs(n) <= 4 else "dní")
+    return f"{fmt_num(n)} {word}"
 
-    chart_key = f"dv_chart_{state.nonce()}"
-    chart_sel = _chart_selection(chart_key)
-    left, center = st.columns([1, 2.6], gap="medium")
-    with left:
-        listed_ids = _selection_panel(g, a, chart_sel)
-    with center:
-        tabs = st.tabs(
-            ["Rozložení odchylek", "Neobvyklé případy", "Skupinové vzorce", "Kontext charakteristik"]
-        )
-        with tabs[0]:
-            _distribution(g, a, chart_key)
-        with tabs[1]:
-            _ranked(g, a)
-        with tabs[2]:
-            _groups(g, a)
-        with tabs[3]:
-            _context(g, a)
-    _investigated(g, a)
-    _views_and_export(g, a, listed_ids)
+
+def _n_phrase(n: int, one: str, few: str, many: str) -> str:
+    return f"{n} {one if n == 1 else few if 2 <= n <= 4 else many}"
 
 
 # ---------------------------------------------------------------------------
-# Ovládání lokální konfigurace
+# Stránka
+# ---------------------------------------------------------------------------
+
+
+def render() -> None:
+    st.title("Analýza odchylek")
+    st.caption(
+        "Celá kohorta najednou: kteří pacienti mají pobyty neobvykle delší nebo kratší než podobní pacienti, "
+        "proč a co mají společného. Očekávání pacientů se zde nemění."
+    )
+    state.show_flash()
+    g = state.global_results()
+    with st.container(border=True):
+        _controls(g)
+    a = state.local_analysis()
+
+    mode = st.session_state.get("dv_chart_mode", "z")
+    chart_key = f"dv_chart_{mode}_{state.nonce()}"
+    xy_key = f"dv_xy_chart_{state.nonce()}"
+    chart_sel = _chart_selection(chart_key)
+    _apply_chart_selection(chart_key, chart_sel)
+    _apply_chart_selection(xy_key, _chart_selection(xy_key))
+
+    _summary(g, a)
+
+    left, right = st.columns([1.55, 1], gap="large")
+    with left:
+        _distribution(g, a, chart_key)
+    with right:
+        _outlier_list(g, a)
+
+    _focus(g, a)
+    _groups(g, a)
+    _two_values(g, a, xy_key)
+    listed_ids = _tools(g, a, chart_sel)
+
+    st.divider()
+    _export_button(
+        g,
+        a,
+        listed_ids,
+        f"Analýza odchylek ({a.analysis_id})",
+        {"seznam": "Další nástroje → vlastní výběr", "n": len(listed_ids)},
+        key="dl_analysis",
+    )
+    components.context_caption(g, f"lokální pohled `{a.analysis_id}`")
+
+    dialog = st.session_state.get(state.K_DIALOG) or ""
+    if dialog.startswith("review:"):
+        components.review_dialog(
+            dialog.split(":", 1)[1], a.analysis_id, f"Analýza odchylek (hranice {fmt_num(a.config.threshold)})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Nastavení
 # ---------------------------------------------------------------------------
 
 
@@ -93,52 +147,61 @@ def _controls(g: GlobalResults) -> None:
     _bind("dv_cluster_dist", float(cfg.cluster_distance_threshold))
     _bind("dv_cluster_min", int(cfg.cluster_min_outliers))
 
-    c1, c2, c3, c4, c5 = st.columns([2.2, 1.5, 2, 1.6, 1.2], vertical_alignment="bottom")
-    metrics = c1.pills(
-        "Ukazatele (odchylky od očekávání)",
-        outcomes,
-        selection_mode="multi",
-        key="dv_metrics",
-        format_func=lambda m: g.metric_labels[m],
-        help="Které výsledkové ukazatele vstupují do skóre. Nejdelší pobyt je korelovaný s mediánem.",
-    )
-    scale = c2.segmented_control(
-        "Škála odchylky",
-        ["log", "raw"],
-        key="dv_scale",
-        required=True,
-        format_func=lambda s: "relativní (log)" if s == "log" else "dny",
-    )
-    threshold = c3.slider(
-        "Pracovní práh míry odchylky",
+    c1, c2, c3 = st.columns([2.2, 2, 1.3], vertical_alignment="bottom", gap="medium")
+    threshold = c1.slider(
+        "Hranice neobvyklosti",
         1.5,
         5.0,
         step=0.1,
         key="dv_threshold",
-        help="Heuristika, ne pravděpodobnost. Změna počtu ukazatelů mění význam skóre.",
+        help="Jak velký rozdíl oproti ostatním pacientům už považujeme za neobvyklý. Nižší hranice = citlivější "
+        "(víc pacientů), vyšší = přísnější. Jde o pracovní heuristiku, ne o pravděpodobnost.",
     )
-    limited = c4.toggle(
-        "Hodnotit i s omezenou referencí",
-        key="dv_limited",
-        help="Pacienti, jejichž očekávání vychází jen ze 4–7 srovnatelných pacientů.",
+    metrics = c2.pills(
+        "Co porovnávat",
+        outcomes,
+        selection_mode="multi",
+        key="dv_metrics",
+        format_func=lambda m: PLAIN_METRIC.get(m, g.metric_labels[m]),
+        help="Typický pobyt = medián délky pobytů pacienta. Nejdelší pobyt = jeho nejdelší hospitalizace. "
+        "Při obou rozhoduje ten, kde je odchylka větší (oba ukazatele spolu souvisejí).",
     )
-    if c5.button("Výchozí pohled", key="dv_reset", icon=":material/restart_alt:"):
+    if c3.button("Výchozí pohled", key="dv_reset", icon=":material/restart_alt:", width="stretch"):
         state.set_analysis_config(default_analysis_config(state.settings()))
         st.session_state[state.K_INVESTIGATED] = []
         st.session_state[state.K_FOCUS] = None
+        st.session_state.pop(K_LAST_CHART, None)
         _reset_widgets()
         st.rerun()
-    with st.expander("Pokročilé: seskupování outlierů"):
+    with st.expander("Pokročilé nastavení"):
         d1, d2 = st.columns(2)
-        dist = d1.slider(
-            "Vzdálenost pro sloučení do skupiny (z-jednotky)",
+        scale = d1.segmented_control(
+            "Jak měřit rozdíl",
+            ["log", "raw"],
+            key="dv_scale",
+            required=True,
+            format_func=lambda s: "poměrem (doporučeno)" if s == "log" else "ve dnech",
+            help="Poměrem: 10 dní místo 5 je podobně neobvyklé jako 40 místo 20. Ve dnech: rozhoduje "
+            "absolutní počet dní, takže víc vyniknou dlouhé pobyty.",
+        )
+        limited = d2.toggle(
+            "Hodnotit i pacienty s malou srovnávací skupinou",
+            key="dv_limited",
+            help="Pacienti, jejichž očekávání vychází jen ze 4–7 podobných pacientů. Výsledek je označen jako "
+            "méně spolehlivý.",
+        )
+        d3, d4 = st.columns(2)
+        dist = d3.slider(
+            "Jak podobní musí být pacienti ve skupině",
             0.5,
             5.0,
             step=0.25,
             key="dv_cluster_dist",
-            help="Větší hodnota = méně a větších skupin (konzervativnější).",
+            help="Větší hodnota = méně a větších skupin (volnější podobnost).",
         )
-        cmin = d2.number_input("Minimum outlierů pro hledání skupin", 2, 20, step=1, key="dv_cluster_min")
+        cmin = d4.number_input(
+            "Nejméně neobvyklých pacientů pro hledání skupin", 2, 20, step=1, key="dv_cluster_min"
+        )
 
     if not metrics:
         st.warning("Vyberte alespoň jeden ukazatel – ponechán předchozí výběr.")
@@ -154,6 +217,666 @@ def _controls(g: GlobalResults) -> None:
     )
     if new != cfg:
         state.set_analysis_config(new)
+
+
+def _set_threshold(value: float) -> None:
+    st.session_state["dv_threshold"] = float(value)
+
+
+def _threshold_for(a: AnalysisResult, n: int) -> float | None:
+    """Nejpřísnější hranice (krok 0,1, ≥ 1,5), při které bude neobvyklých alespoň n pacientů."""
+    s = a.scores.loc[a.scores["scored"], "score"].sort_values(ascending=False).to_numpy()
+    if len(s) < n:
+        return None
+    t = float(np.floor(s[n - 1] * 10) / 10)
+    return t if 1.5 <= t < a.config.threshold else None
+
+
+# ---------------------------------------------------------------------------
+# Souhrn slovy
+# ---------------------------------------------------------------------------
+
+
+def _summary(g: GlobalResults, a: AnalysisResult) -> None:
+    s = a.scores
+    n_total = len(s)
+    scored = s[s["scored"]]
+    out = scored[scored["outlier"]]
+    n_out, n_scored = len(out), len(scored)
+    n_long = int((out["direction"] == "longer").sum())
+    n_short = int((out["direction"] == "shorter").sum())
+    n_strong = int((out["band"] == "výrazná odchylka").sum())
+    n_near = int((scored["band"] == "těsně pod prahem").sum())
+    n_weak = int((out["support_level"] == "omezená opora").sum())
+    thr = a.config.threshold
+
+    with st.container(border=True):
+        if n_out:
+            st.markdown(
+                f"### {_n_phrase(n_out, 'neobvyklý pacient', 'neobvyklí pacienti', 'neobvyklých pacientů')} "
+                f"z {n_scored} porovnatelných"
+            )
+        else:
+            st.markdown(f"### Žádný neobvyklý pacient z {n_scored} porovnatelných")
+        parts = []
+        if n_out:
+            dirs = []
+            if n_long:
+                dirs.append(f"**delší** než obvykle u {n_long}")
+            if n_short:
+                dirs.append(f"**kratší** u {n_short}")
+            parts.append(
+                f"Při hranici {fmt_num(thr)} jsou pobyty ve srovnání s podobnými pacienty {' a '.join(dirs)} "
+                "z nich."
+            )
+            if n_strong:
+                parts.append(f"Výrazně se odchyluje {n_strong}, ostatní jsou hraniční.")
+            if n_weak:
+                parts.append(
+                    f"U {n_weak} z nich stojí srovnání na malém počtu pacientů nebo pobytů – berte je opatrně."
+                )
+        else:
+            parts.append(
+                f"Při hranici {fmt_num(thr)} nikdo nepřekračuje obvyklé rozdíly. I to je platný výsledek; pro "
+                "průzkum můžete hranici snížit."
+            )
+        if n_near:
+            parts.append(
+                f"Další {n_near} jsou těsně pod hranicí." if n_near <= 4 else f"Dalších {n_near} je těsně pod hranicí."
+            )
+        if n_total > n_scored:
+            n_not = n_total - n_scored
+            parts.append(
+                f"{_n_phrase(n_not, 'pacienta', 'pacienty', 'pacientů')} nelze porovnat (chybí započitatelné "
+                "pobyty nebo podobní pacienti)."
+            )
+        st.markdown(" ".join(parts))
+
+        # Jak výsledek závisí na hranici – skóre na hranici nezávisí, jen se jinak „řízne“.
+        steps = [t for t in (2.0, 2.5, 3.0, 3.5) if abs(t - thr) > 1e-9]
+        counts = [f"{fmt_num(t)} → {int((scored['score'] >= t).sum())}" for t in steps]
+        st.caption("Kolik by bylo neobvyklých při jiné hranici: " + ", ".join(counts) + ".")
+
+        info = a.cluster_info
+        if info.get("status") == "clustered" and info.get("n_groups", 0):
+            st.markdown(
+                f"Mezi neobvyklými pacienty jsme našli **{_n_phrase(info['n_groups'], 'skupinu', 'skupiny', 'skupin')}** "
+                "s podobným průběhem – viz Co mají společného níže."
+            )
+        elif info.get("status") == "too_few":
+            need = a.config.cluster_min_outliers
+            sugg = _threshold_for(a, need)
+            st.markdown(
+                f"Na hledání společných rysů je neobvyklých pacientů málo (potřeba alespoň {need})."
+            )
+            if sugg is not None:
+                st.button(
+                    f"Zmírnit hranici na {fmt_num(sugg)} a hledat společné rysy",
+                    key="dv_relax",
+                    icon=":material/tune:",
+                    on_click=_set_threshold,
+                    args=(sugg,),
+                )
+
+
+# ---------------------------------------------------------------------------
+# Graf
+# ---------------------------------------------------------------------------
+
+
+def _apply_chart_selection(chart_key: str, chart_sel: list[str]) -> None:
+    """Klik / výběr v grafu → vybraní pacienti (jen při nové volbě, aby šlo vybírat i jinak)."""
+    last = st.session_state.setdefault(K_LAST_CHART, {})
+    if chart_sel and chart_sel != last.get(chart_key):
+        last[chart_key] = chart_sel
+        st.session_state[state.K_INVESTIGATED] = list(chart_sel)
+        st.session_state[state.K_FOCUS] = chart_sel[0]
+
+
+def _distribution(g: GlobalResults, a: AnalysisResult, chart_key: str) -> None:
+    st.markdown("#### Kde leží pacienti")
+    w = _dims_wide(g, a)
+    if w.empty:
+        st.info("V aktuálním nastavení nelze porovnat žádného pacienta.")
+        return
+    highlight = set(st.session_state.get(state.K_INVESTIGATED, []))
+    metrics = list(a.config.metrics)
+    mode = st.segmented_control(
+        "Zobrazení",
+        ["z", "days"],
+        key="dv_chart_mode",
+        default="z",
+        required=True,
+        format_func=lambda m: "Míra odchylky" if m == "z" else "Skutečnost vs. očekávání (dny)",
+        label_visibility="collapsed",
+    )
+    m0 = metrics[0]
+    if mode == "days":
+        df = w.rename(
+            columns={f"obs__{m0}": "observed", f"exp__{m0}": "expected", f"res__{m0}": "residual"}
+        )
+        fig = charts.observed_vs_expected(df, highlight, PLAIN_METRIC.get(m0, g.metric_labels[m0]))
+        st.plotly_chart(
+            fig, key=chart_key, on_select="rerun", selection_mode=("points", "box", "lasso"), width="stretch"
+        )
+        st.caption(
+            "Každý bod je jeden pacient. Na čárkované úhlopříčce by skutečnost přesně odpovídala očekávání; "
+            "nad ní jsou pobyty delší, pod ní kratší. Barevně jsou pacienti nad hranicí. Kliknutím na bod "
+            "zobrazíte vysvětlení."
+        )
+    elif len(metrics) == 1:
+        df = w.rename(
+            columns={f"z__{m0}": "z", f"obs__{m0}": "observed", f"exp__{m0}": "expected", f"res__{m0}": "residual"}
+        )
+        fig = charts.residual_strip(
+            df, a.config.threshold, highlight, "míra odchylky (← kratší než obvykle · delší než obvykle →)"
+        )
+        st.plotly_chart(
+            fig, key=chart_key, on_select="rerun", selection_mode=("points", "box", "lasso"), width="stretch"
+        )
+        st.caption(
+            "Každý bod je jeden pacient, řádky jsou skupiny diagnóz. Čím dál od středu, tím neobvyklejší rozdíl "
+            "oproti podobným pacientům; za čárkovanými čarami jsou neobvyklí pacienti. Kliknutím na bod "
+            "zobrazíte vysvětlení, tažením vyberete víc pacientů."
+        )
+    else:
+        mx, my = metrics[0], metrics[1]
+        df = w.assign(zx=w[f"z__{mx}"], zy=w[f"z__{my}"])
+        df["info"] = [
+            f"{PLAIN_METRIC.get(mx, mx)}: {_days(r[f'obs__{mx}'])} místo {_days(r[f'exp__{mx}'])}"
+            f"<br>{PLAIN_METRIC.get(my, my)}: {_days(r[f'obs__{my}'])} místo {_days(r[f'exp__{my}'])}"
+            for _, r in df.iterrows()
+        ]
+        fig = charts.z_scatter(
+            df,
+            f"míra odchylky – {PLAIN_METRIC.get(mx, mx).lower()}",
+            f"míra odchylky – {PLAIN_METRIC.get(my, my).lower()}",
+            a.config.threshold,
+            highlight,
+        )
+        st.plotly_chart(
+            fig, key=chart_key, on_select="rerun", selection_mode=("points", "box", "lasso"), width="stretch"
+        )
+        st.caption(
+            "Každý bod je jeden pacient. Uvnitř čárkovaného čtverce jsou běžné rozdíly, mimo něj neobvyklí "
+            "pacienti. Oba ukazatele spolu souvisejí, takže shoda v obou není nezávislým potvrzením."
+        )
+    n_not = int((~a.scores["scored"]).sum())
+    if n_not:
+        st.caption(f"{n_not} pacientů, které nelze porovnat, v grafu není.")
+
+
+# ---------------------------------------------------------------------------
+# Seznam neobvyklých pacientů (karty)
+# ---------------------------------------------------------------------------
+
+
+def _patient_sentence(dim: pd.Series, metric_id: str, g: GlobalResults) -> str:
+    """„Typický pobyt **21 dní** místo obvyklých **5 dní** – o 16 dní déle (4,2×).“"""
+    obs, exp, res = dim["observed"], dim["expected"], dim["residual"]
+    label = PLAIN_METRIC.get(metric_id, g.metric_labels.get(metric_id, metric_id))
+    if pd.isna(obs) or pd.isna(exp):
+        return f"{label}: údaj chybí."
+    if res > 0:
+        tail = f"o {_days(abs(res))} déle"
+        if exp >= 1 and obs / exp >= 1.5:
+            tail += f" ({fmt_num(obs / exp)}×)"
+    elif res < 0:
+        tail = f"o {_days(abs(res))} kratší"
+        if obs >= 1 and exp / obs >= 1.5:
+            tail += f" ({fmt_num(exp / obs)}× kratší)"
+    else:
+        tail = "přesně podle očekávání"
+    return f"{label} **{_days(obs)}** místo obvyklých **{_days(exp)}** – {tail}."
+
+
+def _driver_dim(a: AnalysisResult, pid: str) -> tuple[pd.Series, str]:
+    s = a.scores.set_index("patient_id").loc[pid]
+    metric = s["driver_metric"] or a.config.metrics[0]
+    d = a.dims[(a.dims["patient_id"] == pid) & (a.dims["metric_id"] == metric)].iloc[0]
+    return d, metric
+
+
+def _outlier_list(g: GlobalResults, a: AnalysisResult) -> None:
+    s = a.scores[a.scores["scored"]].sort_values("rank")
+    out = s[s["outlier"]]
+    near = s[s["band"] == "těsně pod prahem"]
+    st.markdown(f"#### Neobvyklí pacienti ({len(out)})")
+    if out.empty and near.empty:
+        st.caption("Při této hranici nikdo. Zkuste hranici snížit.")
+        return
+    t = g.patient_table.set_index("patient_id")
+    cur = state.reviews_current()
+    rv = cur.set_index("patient_id")["status"] if not cur.empty else pd.Series(dtype=str)
+    focus = st.session_state.get(state.K_FOCUS)
+    with st.container(height=560, border=False):
+        for _, r in out.iterrows():
+            _card(g, a, r, t, rv, focus)
+        if len(near):
+            st.markdown(f"**Těsně pod hranicí ({len(near)})**")
+            for _, r in near.iterrows():
+                _card(g, a, r, t, rv, focus)
+
+
+def _card(g, a, r: pd.Series, t: pd.DataFrame, rv: pd.Series, focus: str | None) -> None:
+    pid = r["patient_id"]
+    d, metric = _driver_dim(a, pid)
+    group = t.at[pid, "dx_group_label"] if t.at[pid, "dx_group"] else ""
+    with st.container(border=True):
+        st.markdown(f"**{pid}** · {t.at[pid, 'dx_icd10']} {group} · :gray[{t.at[pid, 'age_group']} let]")
+        st.markdown(_patient_sentence(d, metric, g))
+        badges = []
+        text, color = BAND_BADGE.get(r["band"], (r["band"], "gray"))
+        badges.append(f":{color}-badge[{text}]")
+        if r["support_level"] == "omezená opora":
+            badges.append(":gray-badge[:material/warning: méně spolehlivé]")
+        status = rv.get(pid, "")
+        if status and status != ReviewStatus.NOT_REVIEWED.value:
+            badges.append(f":blue-badge[{review_label(status)}]")
+        if r.get("cluster_label") and str(r["cluster_label"]).startswith("Skupina"):
+            badges.append(f":violet-badge[{r['cluster_label']}]")
+        b1, b2 = st.columns([2.2, 1], vertical_alignment="center")
+        b1.markdown(" ".join(badges))
+        b2.button(
+            "Vybráno" if pid == focus else "Vysvětlit",
+            key=f"dv_pick_{pid}",
+            type="primary" if pid == focus else "secondary",
+            icon=":material/check:" if pid == focus else ":material/arrow_downward:",
+            width="stretch",
+            on_click=_pick,
+            args=(pid,),
+        )
+
+
+def _pick(pid: str) -> None:
+    st.session_state[state.K_INVESTIGATED] = [pid]
+    st.session_state[state.K_FOCUS] = pid
+
+
+# ---------------------------------------------------------------------------
+# Vysvětlení vybraného pacienta
+# ---------------------------------------------------------------------------
+
+
+def _focus(g: GlobalResults, a: AnalysisResult) -> None:
+    inv = [p for p in st.session_state.get(state.K_INVESTIGATED, []) if p in set(g.core["patient_id"])]
+    st.markdown(f"### Vybraní pacienti ({len(inv)})")
+    if not inv:
+        st.caption(
+            "Klikněte na bod v grafu nebo na „Vysvětlit“ u pacienta v seznamu – zde se ukáže, proč je "
+            "neobvyklý."
+        )
+        return
+    focus = st.session_state.get(state.K_FOCUS)
+    if focus not in inv:
+        focus = inv[0]
+    if len(inv) > 1:
+        focus = st.selectbox(
+            f"Vybráno {len(inv)} pacientů – vysvětlit:", inv, index=inv.index(focus), key=f"dv_focus_{state.nonce()}"
+        )
+    s = a.scores.set_index("patient_id").loc[focus]
+    t = g.patient_table.set_index("patient_id").loc[focus]
+    with st.container(border=True):
+        left, right = st.columns([2.2, 1], gap="large")
+        with left:
+            group = t["dx_group_label"] if t["dx_group"] else ""
+            st.markdown(f"#### {focus} · {t['dx_icd10']} {group}")
+            st.caption(f"Věková skupina {t['age_group']} let, pohlaví {t['sex']}.")
+            if not s["scored"]:
+                st.info(f"Pacienta v tomto pohledu nelze porovnat: {s['not_scored_reason']}")
+            else:
+                for line in _why_lines(g, a, focus, s):
+                    st.markdown(line)
+            with st.expander("Čísla výpočtu"):
+                ex = explain_flag(s, a.dims[a.dims["patient_id"] == focus], a.config, g.metric_labels)
+                st.markdown(ex["summary"])
+                st.dataframe(
+                    ex["table"],
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "Pozorováno": st.column_config.NumberColumn(format="%.1f"),
+                        "Očekávání": st.column_config.NumberColumn(format="%.1f"),
+                        "Rozdíl (dny)": st.column_config.NumberColumn(format="%+.1f"),
+                        "Relativní rozdíl": st.column_config.NumberColumn(format="percent"),
+                        "Standardizovaná odchylka": st.column_config.NumberColumn(format="%+.2f"),
+                    },
+                )
+                if ex["counterfactual"]:
+                    st.caption(ex["counterfactual"])
+            if st.button(
+                f"Otevřít kartu pacienta {focus}", key="dv_open_detail", icon=":material/person:"
+            ):
+                state.open_patient(focus, from_analysis=True)
+                st.switch_page(state.PATIENTS_PAGE)
+            if len(inv) > 1:
+                st.caption("Ve výběru: " + ", ".join(inv[:40]) + (" …" if len(inv) > 40 else ""))
+        with right:
+            st.markdown("**Posouzení lékařem**")
+            components.review_card(focus)
+
+
+def _why_lines(g: GlobalResults, a: AnalysisResult, pid: str, s: pd.Series) -> list[str]:
+    cfg = a.config
+    d, metric = _driver_dim(a, pid)
+    lines = [_patient_sentence(d, metric, g)]
+    other = a.dims[(a.dims["patient_id"] == pid) & (a.dims["metric_id"] != metric)]
+    for _, o in other.iterrows():
+        lines.append(":gray[" + _patient_sentence(o, o["metric_id"], g).replace("**", "") + "]")
+
+    r = g.results_long[(g.results_long["patient_id"] == pid) & (g.results_long["metric_id"] == metric)].iloc[0]
+    n_ref = int(r["reference_n"])
+    if n_ref:
+        level = str(r.get("reference_level_label", "") or "").replace("stejná ", "stejnou ")
+        lines.append(
+            f"**S kým porovnáváme:** {_n_phrase(n_ref, 'podobný pacient', 'podobní pacienti', 'podobných pacientů')}"
+            + (f" ({level})" if level else "")
+            + f"; do výpočtu pacienta vstupuje {_n_phrase(int(d['support_n']), 'pobyt', 'pobyty', 'pobytů')}."
+        )
+
+    z = abs(float(d["z"]))
+    verdict = "je **neobvyklý**" if s["outlier"] else "**není** neobvyklý"
+    lines.append(
+        f"**Proč {verdict}:** rozdíl oproti očekávání je {fmt_num(z, 1)}× větší než rozdíly, jaké běžně vídáme "
+        f"u ostatních pacientů (hranice je {fmt_num(cfg.threshold)})."
+    )
+    if pd.notna(d.get("allowed_low")) and pd.notna(d.get("allowed_high")):
+        lines.append(
+            f"**Co by bylo obvyklé:** při stejném očekávání by za běžný platil "
+            f"{PLAIN_METRIC.get(metric, '').lower() or 'pobyt'} zhruba {_days(d['allowed_low'])} až "
+            f"{_days(d['allowed_high'])}."
+        )
+    stricter = [t for t in cfg.sensitivity_thresholds if t > cfg.threshold]
+    looser = [t for t in cfg.sensitivity_thresholds if t < cfg.threshold]
+    if s["outlier"]:
+        keep = [t for t in stricter if s["score"] >= t]
+        if keep:
+            lines.append(f"**Jak pevný je nález:** neobvyklý by zůstal i při přísnější hranici {fmt_num(max(keep))}.")
+        elif stricter:
+            lines.append(
+                f"**Jak pevný je nález:** hraniční – při hranici {fmt_num(min(stricter))} by už označen nebyl."
+            )
+    else:
+        flag = [t for t in looser if s["score"] >= t]
+        if flag:
+            lines.append(f"**Jak blízko je hranici:** při mírnější hranici {fmt_num(max(flag))} by byl označen.")
+    if s["support_notes"]:
+        lines.append(f":orange[⚠ Méně spolehlivé srovnání: {s['support_notes']}.]")
+    if s.get("cluster_label") and str(s["cluster_label"]).startswith("Skupina"):
+        lines.append(f"Patří do **{s['cluster_label']}** – viz Co mají společného.")
+    return lines
+
+
+# ---------------------------------------------------------------------------
+# Skupiny
+# ---------------------------------------------------------------------------
+
+
+def _plain_finding(row: dict) -> str:
+    label = row["feature_label"]
+    if row["kind"] == "categorical":
+        n_g = int(row["n_group_available"])
+        cnt = int(round(row["group_stat"] * n_g))
+        return (
+            f"{label}: **{row['value']}** u {cnt} z {n_g} ve skupině, u ostatních jen u "
+            f"{fmt_pct(row['reference_stat'])}"
+            if row["difference"] > 0
+            else f"{label}: **{row['value']}** jen u {cnt} z {n_g} ve skupině, u ostatních u "
+            f"{fmt_pct(row['reference_stat'])}"
+        )
+    more = "více" if row["difference"] > 0 else "méně"
+    return (
+        f"{label}: ve skupině {more} – medián **{fmt_num(row['group_stat'])}** oproti "
+        f"{fmt_num(row['reference_stat'])} u ostatních"
+    )
+
+
+def _groups(g: GlobalResults, a: AnalysisResult) -> None:
+    st.markdown("### Co mají neobvyklí pacienti společného")
+    info = a.cluster_info
+    if info.get("status") != "clustered" or not a.group_cards:
+        msg = {
+            "no_outliers": "Při této hranici nejsou žádní neobvyklí pacienti, takže není co seskupovat.",
+            "too_few": f"Neobvyklých pacientů je málo na hledání skupin (potřeba alespoň "
+            f"{a.config.cluster_min_outliers}). Každý z nich je jednotlivý případ – zkuste mírnější hranici.",
+        }.get(info.get("status"), "Mezi neobvyklými pacienty se neopakuje žádný společný vzorec.")
+        st.caption(msg)
+        return
+    st.caption(
+        "Seskupujeme jen neobvyklé pacienty podle toho, jak a jak moc se odchylují. U každé skupiny ukazujeme, "
+        "čím se liší od ostatních porovnatelných pacientů. Jsou to hypotézy k ověření, ne prokázané souvislosti."
+    )
+    cols = st.columns(min(len(a.group_cards), 2), gap="medium")
+    sc = a.scores.set_index("patient_id")
+    for i, card in enumerate(a.group_cards):
+        members = card["members"]
+        dirs = sc.loc[members, "direction"]
+        n_long, n_short = int((dirs == "longer").sum()), int((dirs == "shorter").sum())
+        if n_long == len(members):
+            how = "všichni s delšími pobyty"
+        elif n_short == len(members):
+            how = "všichni s kratšími pobyty"
+        else:
+            how = f"{n_long} s delšími, {n_short} s kratšími pobyty"
+        d = a.dims[a.dims["patient_id"].isin(members) & (a.dims["metric_id"] == a.config.metrics[0])]
+        with cols[i % len(cols)], st.container(border=True):
+            st.markdown(f"#### {card['group']}: {_n_phrase(card['n'], 'pacient', 'pacienti', 'pacientů')}, {how}")
+            st.markdown(
+                f"{PLAIN_METRIC.get(a.config.metrics[0], 'Pobyt')} typicky **{_days(d['observed'].median())}** "
+                f"místo obvyklých **{_days(d['expected'].median())}**."
+            )
+            st.markdown(f"**Diagnózy:** {card['dx_composition']}  \n**Věk:** {card['age_composition']}")
+            rows = card.get("top_local_rows") or []
+            if rows:
+                st.markdown(
+                    f"**Čím se liší od ostatních** ({card['n_reference']} porovnatelných pacientů):\n"
+                    + "\n".join(f"- {_plain_finding(r)}" for r in rows)
+                )
+            else:
+                st.markdown("Od ostatních pacientů se v dostupných údajích výrazně neliší.")
+            for w in card["warnings"]:
+                st.caption(f"⚠ {w}")
+            b1, b2 = st.columns([1, 1.4], vertical_alignment="center")
+            if b1.button("Ukázat v grafu", key=f"grp_show_{card['cluster_id']}", icon=":material/scatter_plot:"):
+                st.session_state[state.K_INVESTIGATED] = list(members)
+                st.session_state[state.K_FOCUS] = members[0]
+                st.rerun()
+            b2.caption(", ".join(members))
+            with st.expander("Podrobnosti"):
+                for line in card["profile"]:
+                    st.markdown(f"- {line}")
+                st.markdown(f"**Pohlaví:** {card['sex_composition']}")
+                st.markdown(f"**Ve srovnání jen s pacienty stejných diagnóz** (n={card['n_dx_reference']}):")
+                for f in card["top_dx"] or ["žádný rozdíl nepřekročil pracovní hranici popisu"]:
+                    st.markdown(f"- {f}")
+    iso = a.clusters[a.clusters["isolated"].astype(bool)] if not a.clusters.empty else a.clusters
+    if len(iso):
+        st.caption("Jednotliví neobvyklí pacienti bez skupiny: " + ", ".join(iso["patient_id"]))
+
+
+# ---------------------------------------------------------------------------
+# Vlastní graf ze dvou údajů
+# ---------------------------------------------------------------------------
+
+
+def _xy_options(g: GlobalResults) -> dict[str, str]:
+    """Klíč → srozumitelný název. Jen číselné údaje, jeden údaj = jedna hodnota na pacienta."""
+    opts: dict[str, str] = {}
+    for m in g.baseline.config.outcomes:
+        name = PLAIN_METRIC.get(m, g.metric_labels[m])
+        opts[f"out:{m}:observed"] = f"{name} – skutečnost (dny)"
+        opts[f"out:{m}:expected"] = f"{name} – očekávání (dny)"
+        opts[f"out:{m}:residual"] = f"{name} – rozdíl oproti očekávání (dny)"
+    opts["score"] = "Míra odchylky (aktuální nastavení)"
+    _, num = descriptor_columns(g.extra_meta)
+    for c in num:
+        if c in g.patient_table.columns:
+            opts[f"pt:{c}"] = g.label(c)
+    labs = g.lab_catalog[g.lab_catalog["n_patients"] >= 15]
+    for key, label in zip(labs["test_key"], labs["test_label"], strict=False):
+        opts[f"lab:{key}"] = f"Laboratoř {label} (medián pacienta)"
+    return opts
+
+
+def _xy_values(g: GlobalResults, a: AnalysisResult, key: str) -> pd.Series:
+    if key.startswith("out:"):
+        _, m, field = key.split(":", 2)
+        r = g.results_long[g.results_long["metric_id"] == m].set_index("patient_id")
+        return pd.to_numeric(r[field], errors="coerce")
+    if key == "score":
+        return a.scores.set_index("patient_id")["score"].astype(float)
+    if key.startswith("pt:"):
+        return pd.to_numeric(g.patient_table.set_index("patient_id")[key[3:]], errors="coerce").astype(float)
+    lm = g.lab_medians[g.lab_medians["test_key"] == key[4:]]
+    return lm.set_index("patient_id")["median_value"].astype(float)
+
+
+def _two_values(g: GlobalResults, a: AnalysisResult, chart_key: str) -> None:
+    st.markdown("### Vlastní graf ze dvou údajů")
+    st.caption(
+        "Vyberte libovolné dva údaje. Graf ukáže medián obou (křížek) a zvýrazní pacienty, kteří od něj leží "
+        "daleko – v kterémkoli směru. Na bod nebo řádek tabulky lze kliknout."
+    )
+    opts = _xy_options(g)
+    keys = list(opts)
+    _bind("dv_xy_x", "pt:n_inpatient_completed" if "pt:n_inpatient_completed" in opts else keys[0])
+    _bind("dv_xy_y", "out:median_los_dx:observed" if "out:median_los_dx:observed" in opts else keys[1])
+    _bind("dv_xy_thr", 2.5)
+    c1, c2, c3 = st.columns([2, 2, 1.4], vertical_alignment="bottom")
+    kx = c1.selectbox("Osa x", keys, key="dv_xy_x", format_func=opts.get)
+    ky = c2.selectbox("Osa y", keys, key="dv_xy_y", format_func=opts.get)
+    thr = c3.slider(
+        "Co je „daleko“",
+        1.5,
+        5.0,
+        step=0.1,
+        key="dv_xy_thr",
+        help="Vzdálenost od mediánu v násobcích běžného rozptylu (stejný princip jako míra odchylky).",
+    )
+    if kx == ky:
+        st.info("Vyberte dva různé údaje.")
+        return
+    df = pd.DataFrame({"x": _xy_values(g, a, kx), "y": _xy_values(g, a, ky)}).dropna()
+    df.index.name = "patient_id"
+    df = df.reset_index()
+    n_all = len(g.core)
+    if len(df) < 8:
+        st.info(f"Oba údaje má jen {len(df)} pacientů – na smysluplné srovnání je to málo.")
+        return
+    cx, sx, _ = robust_scale(df["x"].to_numpy(dtype=float))
+    cy, sy, _ = robust_scale(df["y"].to_numpy(dtype=float))
+    zx = (df["x"] - cx) / sx if np.isfinite(sx) else pd.Series(0.0, index=df.index)
+    zy = (df["y"] - cy) / sy if np.isfinite(sy) else pd.Series(0.0, index=df.index)
+    df["dist"] = np.sqrt(zx**2 + zy**2)
+    df["far"] = df["dist"] >= thr
+    df["info"] = [
+        f"{opts[kx]}: {fmt_num(x, 2)} (medián {fmt_num(cx, 2)})<br>{opts[ky]}: {fmt_num(y, 2)} "
+        f"(medián {fmt_num(cy, 2)})<br>vzdálenost {fmt_num(d, 1)}"
+        for x, y, d in zip(df["x"], df["y"], df["dist"], strict=True)
+    ]
+    if not (np.isfinite(sx) and np.isfinite(sy)):
+        st.warning(
+            "Jeden z údajů má u většiny pacientů stejnou hodnotu – vzdálenost se počítá jen podle druhého."
+        )
+    highlight = set(st.session_state.get(state.K_INVESTIGATED, []))
+    fig = charts.median_scatter(df, opts[kx], opts[ky], (cx, cy), (sx, sy), thr, highlight)
+    st.plotly_chart(
+        fig, key=chart_key, on_select="rerun", selection_mode=("points", "box", "lasso"), width="stretch",
+        theme=None,
+    )
+    focus = st.session_state.get(state.K_FOCUS)
+    if focus in set(df["patient_id"]):
+        row = df.set_index("patient_id").loc[focus]
+        with st.container(border=True):
+            f1, f2 = st.columns([3, 1], vertical_alignment="center")
+            f1.markdown(
+                f"**Vybrán {focus}:** {opts[kx].lower()} {fmt_num(row['x'], 2)} (medián {fmt_num(cx, 2)}), "
+                f"{opts[ky].lower()} {fmt_num(row['y'], 2)} (medián {fmt_num(cy, 2)}); vzdálenost "
+                f"{fmt_num(row['dist'], 1)} – {'daleko od mediánu' if row['far'] else 'blízko mediánu'}. "
+                "Podrobné vysvětlení odchylky je výše v části Vybraní pacienti."
+            )
+            if f2.button("Otevřít kartu pacienta", key="dv_xy_open", icon=":material/person:", width="stretch"):
+                state.open_patient(focus, from_analysis=True)
+                st.switch_page(state.PATIENTS_PAGE)
+    far = df[df["far"]].sort_values("dist", ascending=False)
+    st.caption(
+        f"V grafu je {len(df)} z {n_all} pacientů (ostatním některý údaj chybí). Daleko od mediánu: "
+        f"**{len(far)}**. Elipsa ukazuje hranici „daleko“; je to popis rozložení, ne klinický závěr."
+    )
+    if len(far):
+        t = g.patient_table.set_index("patient_id")
+        sc = a.scores.set_index("patient_id")
+        view = pd.DataFrame(
+            {
+                "ID": far["patient_id"].to_numpy(),
+                "Diagnóza": t.loc[far["patient_id"], "dx_icd10"].to_numpy(),
+                opts[kx]: far["x"].to_numpy(),
+                opts[ky]: far["y"].to_numpy(),
+                "Vzdálenost": far["dist"].to_numpy(),
+                "Neobvyklý v analýze": [
+                    "ano" if bool(sc.at[p, "outlier"]) else "" for p in far["patient_id"]
+                ],
+            }
+        )
+        ev = st.dataframe(
+            view,
+            hide_index=True,
+            width="stretch",
+            height=min(320, 38 + 35 * len(view)),
+            on_select="rerun",
+            selection_mode="single-row",
+            key=f"dv_xy_table_{state.nonce()}",
+            column_config={
+                opts[kx]: st.column_config.NumberColumn(format="%.2f"),
+                opts[ky]: st.column_config.NumberColumn(format="%.2f"),
+                "Vzdálenost": st.column_config.NumberColumn(format="%.1f"),
+            },
+        )
+        if ev is not None and ev.selection.rows:
+            pid = str(view.iloc[ev.selection.rows[0]]["ID"])
+            if st.session_state.get(state.K_FOCUS) != pid:
+                _pick(pid)
+                st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Další nástroje
+# ---------------------------------------------------------------------------
+
+
+def _tools(g: GlobalResults, a: AnalysisResult, chart_sel: list[str]) -> list[str]:
+    st.markdown("### Další nástroje")
+    with st.expander("Porovnat jednu charakteristiku", icon=":material/bar_chart:"):
+        _context(g, a)
+    with st.expander("Vlastní výběr pacientů a srovnávací skupina", icon=":material/checklist:"):
+        listed_ids = _selection_panel(g, a, chart_sel)
+    with st.expander("Uložit nebo načíst pohled", icon=":material/bookmark:"):
+        _saved_views(g, a)
+    with st.expander("Jak se to počítá", icon=":material/help:"):
+        st.markdown(
+            "1. Pro každého pacienta známe **skutečnost** (jeho typický nebo nejdelší pobyt) a **očekávání** "
+            "(totéž u podobných pacientů).\n"
+            "2. Spočítáme **rozdíl** – poměrem, nebo ve dnech (Pokročilé nastavení).\n"
+            "3. Zjistíme, jak velké rozdíly jsou u pacientů **běžné** (medián a robustní rozptyl, které "
+            "samotní neobvyklí pacienti téměř neovlivní).\n"
+            "4. **Míra odchylky** = kolikrát je rozdíl pacienta větší než běžný rozptyl. Od hranice výš je "
+            "pacient neobvyklý.\n"
+            "5. Neobvyklé pacienty seskupíme podle podobnosti odchylek a popíšeme, čím se skupina liší od ostatních."
+        )
+        _reference_info(g, a)
+        if len(a.group_summary):
+            st.download_button(
+                "Stáhnout popis skupin (CSV)",
+                a.group_summary.to_csv(index=False).encode("utf-8-sig"),
+                file_name=f"group_summary_{a.analysis_id}.csv",
+                key="dl_groups",
+            )
+    return listed_ids
+
+
+# ---------------------------------------------------------------------------
+# Pomocné funkce (výběr, reference, srovnání, uložené pohledy)
+# ---------------------------------------------------------------------------
 
 
 def _reference_info(g: GlobalResults, a: AnalysisResult) -> None:
@@ -182,10 +905,6 @@ def _reference_info(g: GlobalResults, a: AnalysisResult) -> None:
             "Některý ukazatel nelze v této referenci standardizovat (nulový rozptyl nebo malá reference)."
         )
 
-
-# ---------------------------------------------------------------------------
-# Levý panel: filtry, seznam, role výběru
-# ---------------------------------------------------------------------------
 
 
 def _chart_selection(chart_key: str) -> list[str]:
@@ -317,10 +1036,6 @@ def _selection_panel(g: GlobalResults, a: AnalysisResult, chart_sel: list[str]) 
     return view["ID"].tolist()
 
 
-# ---------------------------------------------------------------------------
-# Grafy
-# ---------------------------------------------------------------------------
-
 
 def _dims_wide(g: GlobalResults, a: AnalysisResult) -> pd.DataFrame:
     d = a.dims
@@ -346,186 +1061,6 @@ def _dims_wide(g: GlobalResults, a: AnalysisResult) -> pd.DataFrame:
         out.append(row)
     return pd.DataFrame(out)
 
-
-def _distribution(g: GlobalResults, a: AnalysisResult, chart_key: str) -> None:
-    w = _dims_wide(g, a)
-    n_not = int((~a.scores["scored"]).sum())
-    if w.empty:
-        st.info("V aktuálním nastavení není žádný pacient skórován – viz důvody v seznamu.")
-        return
-    highlight = set(st.session_state.get(state.K_INVESTIGATED, []))
-    metrics = list(a.config.metrics)
-    scale_txt = "relativní (log) škála" if a.config.scale == "log" else "dny"
-    st.caption(
-        f"Graf zobrazuje {len(w)} skórovaných pacientů; {n_not} nehodnotitelných v grafu není (jsou v seznamu). "
-        f"Osa = standardizovaná odchylka ({scale_txt}) vůči lokální referenci. Výběr bodů (klik, obdélník, "
-        "laso) se propíše do panelu vlevo; alternativou je výběr řádků v seznamu."
-    )
-    if len(metrics) == 1:
-        m = metrics[0]
-        df = w.rename(
-            columns={
-                f"z__{m}": "z",
-                f"obs__{m}": "observed",
-                f"exp__{m}": "expected",
-                f"res__{m}": "residual",
-            }
-        )
-        fig = charts.residual_strip(
-            df, a.config.threshold, highlight, f"standardizovaná odchylka – {g.metric_labels[m]}"
-        )
-        st.plotly_chart(
-            fig, key=chart_key, on_select="rerun", selection_mode=("points", "box", "lasso"), width="stretch"
-        )
-        st.plotly_chart(
-            charts.observed_vs_expected(df, highlight, g.metric_labels[m]),
-            key=f"ove_{state.nonce()}",
-            width="stretch",
-        )
-    else:
-        c1, c2 = st.columns(2)
-        mx = c1.selectbox("Osa x", metrics, index=0, format_func=lambda m: g.metric_labels[m], key="dv_ax_x")
-        my = c2.selectbox("Osa y", metrics, index=1, format_func=lambda m: g.metric_labels[m], key="dv_ax_y")
-        df = w.assign(zx=w[f"z__{mx}"], zy=w[f"z__{my}"])
-        df["info"] = [
-            f"{g.metric_labels[mx]}: {fmt_num(r[f'obs__{mx}'])} vs {fmt_num(r[f'exp__{mx}'])} d ({fmt_signed_days(r[f'res__{mx}'])})"
-            f"<br>{g.metric_labels[my]}: {fmt_num(r[f'obs__{my}'])} vs {fmt_num(r[f'exp__{my}'])} d"
-            for _, r in df.iterrows()
-        ]
-        fig = charts.z_scatter(
-            df,
-            f"standardizovaná odchylka – {g.metric_labels[mx]}",
-            f"standardizovaná odchylka – {g.metric_labels[my]}",
-            a.config.threshold,
-            highlight,
-        )
-        st.plotly_chart(
-            fig, key=chart_key, on_select="rerun", selection_mode=("points", "box", "lasso"), width="stretch"
-        )
-        st.caption("Ukazatele jsou korelované – shoda v obou osách není nezávislým potvrzením.")
-        out = w[w["outlier"]]
-        if len(out):
-            mat = out.set_index("patient_id")[[f"z__{m}" for m in metrics]]
-            mat.columns = [g.metric_labels[m] for m in metrics]
-            st.plotly_chart(charts.z_heatmap(mat), key=f"heat_{state.nonce()}", width="stretch")
-
-
-# ---------------------------------------------------------------------------
-# Seřazené případy
-# ---------------------------------------------------------------------------
-
-
-def _ranked(g: GlobalResults, a: AnalysisResult) -> None:
-    show_all = st.toggle("Zobrazit i případy pod prahem", key="dv_rank_all")
-    s = a.scores[a.scores["scored"]].sort_values("rank")
-    if not show_all:
-        s = s[s["outlier"] | (s["band"] == "těsně pod prahem")]
-    if s.empty:
-        st.info(
-            "Při aktuálním prahu nejsou žádné neobvyklé ani hraniční případy. Nulový počet outlierů je platný výsledek."
-        )
-        return
-    dims = a.dims.set_index(["patient_id", "metric_id"])
-    t = g.patient_table.set_index("patient_id")
-    cur = state.reviews_current()
-    rv = cur.set_index("patient_id")["status"] if not cur.empty else pd.Series(dtype=str)
-    rows = []
-    for r in s.itertuples():
-        d = dims.loc[(r.patient_id, r.driver_metric)]
-        rows.append(
-            {
-                "Pořadí": r.rank,
-                "ID": r.patient_id,
-                "Dg.": t.at[r.patient_id, "dx_icd10"],
-                "Míra": r.score,
-                "Pásmo": r.band,
-                "Směr": components.direction_text(r.direction, short=True),
-                "Proč": (
-                    f"{g.metric_labels[r.driver_metric]}: {fmt_num(d['observed'])} vs. {fmt_num(d['expected'])} dní "
-                    f"({fmt_signed_days(d['residual'])})"
-                ),
-                "Opora": r.support_level + (f" ({r.support_notes})" if r.support_notes else ""),
-                "Citlivost prahu": r.sensitivity,
-                "Skupina": r.cluster_label,
-                "Posouzení": review_label(rv.get(r.patient_id, "")),
-            }
-        )
-    view = pd.DataFrame(rows)
-    ev = st.dataframe(
-        view,
-        hide_index=True,
-        width="stretch",
-        height=360,
-        on_select="rerun",
-        selection_mode="single-row",
-        key=f"dv_rank_{state.nonce()}",
-        column_config={
-            "Míra": st.column_config.NumberColumn(format="%.2f"),
-            "Proč": st.column_config.TextColumn(width="large"),
-        },
-    )
-    if ev is not None and ev.selection.rows:
-        pid = str(view.iloc[ev.selection.rows[0]]["ID"])
-        if st.session_state.get(state.K_FOCUS) != pid:
-            st.session_state[state.K_FOCUS] = pid
-            st.session_state[state.K_INVESTIGATED] = [pid]
-            st.rerun()
-    st.caption(
-        "Pásmo a opora jsou oddělené: vysoké skóre s omezenou oporou není „jistý“ outlier. Citlivost ukazuje, "
-        "při kterých předem zvolených prazích by byl případ označen (✔/✘) – nejde o pravděpodobnost."
-    )
-
-
-# ---------------------------------------------------------------------------
-# Skupiny outlierů
-# ---------------------------------------------------------------------------
-
-
-def _groups(g: GlobalResults, a: AnalysisResult) -> None:
-    info = a.cluster_info
-    st.markdown(f"**{info['message']}**")
-    st.caption(
-        "Shlukuje se jen množina označených outlierů (ne celá kohorta). Popisy jsou deskriptivní hypotézy pro "
-        "mentora; nebyly testovány na statistickou významnost."
-    )
-    for card in a.group_cards:
-        with st.container(border=True):
-            st.markdown(f"##### {card['group']} · {card['n']} pacientů")
-            for line in card["profile"]:
-                st.markdown(f"- {line}")
-            st.markdown(
-                f"**Diagnózy:** {card['dx_composition']}  \n**Věk:** {card['age_composition']}  \n"
-                f"**Pohlaví:** {card['sex_composition']}"
-            )
-            st.markdown(f"**Nejvýraznější rozdíly vůči lokální referenci** (n={card['n_reference']}):")
-            for f in card["top_local"] or ["žádný rozdíl nepřekročil pracovní hranici popisu"]:
-                st.markdown(f"- {f}")
-            with st.expander(f"Vůči referenci se stejnými diagnózami (n={card['n_dx_reference']})"):
-                for f in card["top_dx"] or ["žádný rozdíl nepřekročil pracovní hranici popisu"]:
-                    st.markdown(f"- {f}")
-            for w in card["warnings"]:
-                st.warning(w, icon=":material/info:")
-            c1, c2 = st.columns([1, 2])
-            if c1.button("Zobrazit členy skupiny", key=f"grp_show_{card['cluster_id']}"):
-                st.session_state[state.K_INVESTIGATED] = list(card["members"])
-                st.session_state[state.K_FOCUS] = None
-                st.rerun()
-            c2.caption("Členové: " + ", ".join(card["members"]))
-    iso = a.clusters[a.clusters["isolated"].astype(bool)] if not a.clusters.empty else a.clusters
-    if len(iso):
-        st.markdown("**Jednotlivé / izolované případy:** " + ", ".join(iso["patient_id"]))
-    if len(a.group_summary):
-        st.download_button(
-            "Stáhnout popis skupin (CSV)",
-            a.group_summary.to_csv(index=False).encode("utf-8-sig"),
-            file_name=f"group_summary_{a.analysis_id}.csv",
-            key="dl_groups",
-        )
-
-
-# ---------------------------------------------------------------------------
-# Kontext charakteristik (EDA uvnitř pracovního postupu)
-# ---------------------------------------------------------------------------
 
 
 def _context(g: GlobalResults, a: AnalysisResult) -> None:
@@ -608,66 +1143,6 @@ def _context(g: GlobalResults, a: AnalysisResult) -> None:
             f"Medián {fmt_num(vs.median())} vs. {fmt_num(vr.median())}."
         )
 
-
-# ---------------------------------------------------------------------------
-# Vyšetřovaný výběr, uložení pohledu, export
-# ---------------------------------------------------------------------------
-
-
-def _investigated(g: GlobalResults, a: AnalysisResult) -> None:
-    inv = [p for p in st.session_state.get(state.K_INVESTIGATED, []) if p in set(g.core["patient_id"])]
-    st.divider()
-    st.markdown(f"#### Vyšetřovaný výběr ({len(inv)})")
-    if not inv:
-        st.caption(
-            "Vyberte pacienty v grafu nebo seznamu a stiskněte „Zobrazit vybrané“, případně vyberte případ v "
-            "záložce Neobvyklé případy."
-        )
-        return
-    focus = st.session_state.get(state.K_FOCUS)
-    if focus not in inv:
-        focus = inv[0]
-    if len(inv) > 1:
-        focus = st.selectbox(
-            "Pacient pro vysvětlení", inv, index=inv.index(focus), key=f"dv_focus_{state.nonce()}"
-        )
-    s = a.scores.set_index("patient_id").loc[focus]
-    ex = explain_flag(s, a.dims[a.dims["patient_id"] == focus], a.config, g.metric_labels)
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        st.markdown(f"**{focus}** – " + ex["summary"])
-        if ex["counterfactual"]:
-            st.caption(ex["counterfactual"])
-        if st.button(f"Otevřít detail pacienta {focus}", key="dv_open_detail", icon=":material/person:"):
-            state.open_patient(focus, from_analysis=True)
-            st.switch_page(state.PATIENTS_PAGE)
-        if len(inv) > 1:
-            st.caption("Ve výběru: " + ", ".join(inv[:40]) + (" …" if len(inv) > 40 else ""))
-    with c2:
-        components.review_panel(
-            focus, a.analysis_id, f"Analýza odchylek (práh {fmt_num(a.config.threshold)})", "dv"
-        )
-
-
-def _views_and_export(g: GlobalResults, a: AnalysisResult, listed_ids: list[str]) -> None:
-    st.divider()
-    c1, c2 = st.columns(2)
-    with c1, st.expander("Uložit / načíst pohled", icon=":material/bookmark:"):
-        _saved_views(g, a)
-    with c2:
-        st.markdown("**Export aktuální analýzy**")
-        st.caption(
-            "ZIP obsahuje pacienty ze seznamu vlevo (ve stejném pořadí a filtru), skóre, skupiny, posouzení, "
-            "konfiguraci a verze."
-        )
-        _export_button(
-            g,
-            a,
-            listed_ids,
-            f"Analýza odchylek ({a.analysis_id})",
-            {"seznam": "levý panel", "n": len(listed_ids)},
-            key="dl_analysis",
-        )
 
 
 def _saved_views(g: GlobalResults, a: AnalysisResult) -> None:

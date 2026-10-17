@@ -88,7 +88,7 @@ def test_full_doctor_flow(app, tmp_path):
     at.button(key="detail_to_analysis").click().run()
     assert not at.exception, [e.value for e in at.exception]
     assert at.title[0].value == "Analýza odchylek"
-    assert any("Vyšetřovaný výběr (1)" in m.value for m in at.markdown)
+    assert any("Vybraní pacienti (1)" in m.value for m in at.markdown)
 
     at.pills(key="dv_metrics").set_value(["median_los_dx", "max_los_dx"]).run()
     assert not at.exception, [e.value for e in at.exception]

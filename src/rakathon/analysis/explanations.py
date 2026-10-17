@@ -441,6 +441,11 @@ def _comparisons(members, ref, t, cat_cols, num_cols, lab_medians, label_fn, gro
 
 
 def _top_findings(rows: list[dict], k: int = 6) -> list[str]:
+    return [r["text"] for r in _top_rows(rows, k)]
+
+
+def _top_rows(rows: list[dict], k: int = 6) -> list[dict]:
+    """Nejvýraznější rozdíly (stejná kritéria jako text karet); kategorie a čísla se střídají."""
     cat = [
         r
         for r in rows
@@ -464,7 +469,7 @@ def _top_findings(rows: list[dict], k: int = 6) -> list[str]:
         merged.extend([a, b])
     longer, shorter = (cat, num) if len(cat) > len(num) else (num, cat)
     merged.extend(longer[len(shorter) :])
-    return [r["text"] for r in merged[:k]]
+    return [{k2: v for k2, v in r.items()} for r in merged[:k]]
 
 
 def describe_groups(
@@ -551,6 +556,7 @@ def describe_groups(
                 "n_reference": len(ref),
                 "n_dx_reference": len(dx_ref),
                 "top_local": _top_findings(rows_local),
+                "top_local_rows": _top_rows(rows_local),
                 "top_dx": _top_findings(rows_dx),
                 "warnings": warnings,
             }

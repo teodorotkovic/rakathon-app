@@ -438,3 +438,81 @@ def numeric_compare(sel: pd.Series, ref: pd.Series, title: str, unit: str) -> go
     )
     fig.update_layout(**LAYOUT, title=title, yaxis_title=unit, showlegend=False)
     return fig
+
+
+FAR = "#6B4E9B"
+
+
+def median_scatter(
+    df: pd.DataFrame,
+    x_label: str,
+    y_label: str,
+    center: tuple[float, float],
+    scale: tuple[float, float],
+    threshold: float,
+    highlight: set[str],
+) -> go.Figure:
+    """Dva libovolné údaje: medián (kříž), hranice vzdálenosti (elipsa) a vzdálení pacienti.
+
+    df: patient_id, x, y, dist, far, info. Vzdálenost = robustní (medián, 1,4826·MAD) na každé ose.
+    """
+    fig = go.Figure()
+    cx, cy = center
+    sx, sy = scale
+    if np.isfinite(sx) and np.isfinite(sy):
+        fig.add_shape(
+            type="circle",
+            x0=cx - threshold * sx,
+            x1=cx + threshold * sx,
+            y0=cy - threshold * sy,
+            y1=cy + threshold * sy,
+            line=dict(color=FAR, dash="dash", width=1.5),
+            fillcolor="rgba(107,78,155,0.04)",
+            layer="below",
+        )
+    fig.add_vline(x=cx, line=dict(color=HIGHLIGHT, width=1, dash="dot"))
+    fig.add_hline(y=cy, line=dict(color=HIGHLIGHT, width=1, dash="dot"))
+    fig.add_trace(
+        go.Scatter(
+            x=[cx],
+            y=[cy],
+            mode="markers",
+            name="medián obou údajů",
+            marker=dict(color=HIGHLIGHT, size=13, symbol="x-thin-open", line=dict(width=3, color=HIGHLIGHT)),
+            hovertemplate=f"medián<br>{x_label}: %{{x:.2f}}<br>{y_label}: %{{y:.2f}}<extra></extra>",
+        )
+    )
+    for flag, name, color, opacity, size in (
+        (False, "blízko mediánu", NEUTRAL, 0.5, 9),
+        (True, "daleko od mediánu", FAR, 1.0, 12),
+    ):
+        sub = df[df["far"] == flag]
+        if not len(sub):
+            continue
+        sel = sub["patient_id"].isin(highlight)
+        fig.add_trace(
+            go.Scatter(
+                x=sub["x"],
+                y=sub["y"],
+                mode="markers+text" if flag and len(sub) <= 12 else "markers",
+                text=sub["patient_id"] if flag and len(sub) <= 12 else None,
+                textposition="top center",
+                textfont=dict(size=11, color=FAR),
+                name=name,
+                marker=dict(
+                    color=color,
+                    size=np.where(sel, size + 5, size),
+                    opacity=opacity,
+                    line=dict(color=HIGHLIGHT, width=np.where(sel, 2, 0)),
+                ),
+                customdata=np.stack([sub["patient_id"], sub["info"]], axis=-1),
+                hovertemplate="%{customdata[0]}<br>%{customdata[1]}<extra></extra>",
+            )
+        )
+    fig.update_layout(
+        **{**LAYOUT, "height": 480},
+        xaxis_title=x_label,
+        yaxis_title=y_label,
+        dragmode="select",
+    )
+    return fig
