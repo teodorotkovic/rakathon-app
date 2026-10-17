@@ -5,17 +5,10 @@ Spuštění:  python -m uv run streamlit run app.py --server.address 127.0.0.1
 
 import streamlit as st
 
-from rakathon.ui import sidebar, state
+from rakathon.ui import sidebar, state, style
 
 st.set_page_config(page_title="Odchylky průběhu péče", page_icon=":material/monitor_heart:", layout="wide")
-# Větší ikony a text přepínání stránek v postranním panelu.
-st.html(
-    """<style>
-    [data-testid="stSidebarNavLink"] [data-testid="stIconMaterial"] { font-size: 1.6rem !important; }
-    [data-testid="stSidebarNavLink"] { padding-top: 0.45rem; padding-bottom: 0.45rem; gap: 0.6rem; }
-    [data-testid="stSidebarNavLink"] p, [data-testid="stSidebarNavLink"] span { font-size: 1.05rem; }
-    </style>"""
-)
+style.inject()  # vizuální vrstva (karty, podklad, postranní panel) – viz ui/style.py
 state.init()
 
 if not state.has_dataset():

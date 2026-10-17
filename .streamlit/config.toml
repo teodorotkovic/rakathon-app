@@ -9,5 +9,38 @@ maxUploadSize = 50
 [client]
 toolbarMode = "minimal"
 
+# Vzhled „klinická karta“: šedozelený podklad stránky, bílé karty bloků (doplněno v ui/style.py),
+# tmavý postranní panel a tmavě zelená barva ovládání (barva operačních oděvů).
+# Oranžová a modrá jsou vyhrazené pro směr odchylky (ui/charts.py) – nepoužívat jinde.
+# Písma jsou přibalená ve Streamlitu, aplikace nepotřebuje síť.
 [theme]
 base = "light"
+primaryColor = "#0B6E66"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F5F4"
+textColor = "#1A2B29"
+linkColor = "#0B6E66"
+borderColor = "#D5DEDB"
+dataframeBorderColor = "#E3E9E7"
+dataframeHeaderBackgroundColor = "#F2F5F4"
+showWidgetBorder = true
+font = "sans-serif"
+headingFont = "serif"
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+headingFontSizes = ["2.05rem", "1.6rem", "1.3rem", "1.1rem", "1rem", "0.95rem"]
+baseFontSize = 15
+baseRadius = "0.55rem"
+buttonRadius = "0.45rem"
+metricValueFontWeight = 600
+greenColor = "#0B6E66"
+orangeColor = "#C2540A"
+blueColor = "#0072B2"
+violetColor = "#6B4E9B"
+
+[theme.sidebar]
+backgroundColor = "#15322E"
+secondaryBackgroundColor = "#1F443F"
+textColor = "#E4EEEB"
+borderColor = "#2F5A53"
+primaryColor = "#7CCFC1"
+linkColor = "#9FDDD2"

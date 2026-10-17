@@ -252,7 +252,7 @@ def residual_strip(df: pd.DataFrame, threshold: float, highlight: set[str], x_ti
                 continue
             color = COLOR[d] if flag else NEUTRAL
             name = (
-                {"longer": "▲ neobvykle delší", "shorter": "▼ neobvykle kratší"}.get(d, "neobvyklé")
+                {"longer": "neobvykle delší", "shorter": "neobvykle kratší"}.get(d, "neobvyklé")
                 if flag
                 else "běžný rozdíl"
             )
@@ -283,9 +283,20 @@ def residual_strip(df: pd.DataFrame, threshold: float, highlight: set[str], x_ti
                 )
             )
     for x in (threshold, -threshold):
-        fig.add_vline(x=x, line=dict(color=HIGHLIGHT, dash="dash"), annotation_text=f"hranice {x:+g}")
+        fig.add_vline(
+            x=x,
+            line=dict(color=HIGHLIGHT, dash="dash"),
+            annotation_text=f"hranice {x:+g}".replace(".", ","),
+            annotation_position="bottom right" if x > 0 else "bottom left",
+            annotation_font=dict(size=11, color="#56635F"),
+        )
     fig.update_layout(
-        **{**LAYOUT, "height": 420, "legend": dict(orientation="h", y=1.12, x=0)},
+        **{
+            **LAYOUT,
+            "height": 440,
+            "margin": dict(l=10, r=10, t=50, b=10),
+            "legend": dict(orientation="h", y=1.02, yanchor="bottom", x=0, xanchor="left"),
+        },
         xaxis_title=x_title,
         yaxis_title=None,
         dragmode="select",

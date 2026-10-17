@@ -103,15 +103,17 @@ def render() -> None:
 
     _summary(g, a)
 
-    left, right = st.columns([1.55, 1], gap="large")
-    with left:
+    left, right = st.columns([1.55, 1], gap="medium")
+    with left, st.container(border=True):
         _distribution(g, a, chart_key)
-    with right:
+    with right, st.container(border=True):
         _outlier_list(g, a)
 
     _focus(g, a)
-    _groups(g, a)
-    _two_values(g, a, xy_key)
+    with st.container(border=True):
+        _groups(g, a)
+    with st.container(border=True):
+        _two_values(g, a, xy_key)
     listed_ids = _tools(g, a, chart_sel)
 
     st.divider()
@@ -629,7 +631,7 @@ def _plain_finding(row: dict) -> str:
 
 
 def _groups(g: GlobalResults, a: AnalysisResult) -> None:
-    st.markdown("### Co mají neobvyklí pacienti společného")
+    st.markdown("#### Co mají neobvyklí pacienti společného")
     info = a.cluster_info
     if info.get("status") != "clustered" or not a.group_cards:
         msg = {
@@ -729,7 +731,7 @@ def _xy_values(g: GlobalResults, a: AnalysisResult, key: str) -> pd.Series:
 
 
 def _two_values(g: GlobalResults, a: AnalysisResult, chart_key: str) -> None:
-    st.markdown("### Vlastní graf ze dvou údajů")
+    st.markdown("#### Vlastní graf ze dvou údajů")
     st.caption(
         "Vyberte libovolné dva údaje. Graf ukáže medián obou (křížek) a zvýrazní pacienty, kteří od něj leží "
         "daleko – v kterémkoli směru. Na bod nebo řádek tabulky lze kliknout."
