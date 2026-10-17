@@ -11,8 +11,10 @@ okomentovat a exportovat.
 ## Dvě obrazovky
 - **Pacienti** – nahoře dvě věty „co sledujeme / s kým porovnáváme“, počty *Lze porovnat* a *Neobvyklé případy*,
   filtry a tabulka seřazená podle míry odchylky (neporovnatelní na konci s důvodem, nikdy skrytí; sloupec
-  *Spolehlivost*). Kliknutím na řádek se otevře detail: s čím ho porovnáváme, co vyvolává označení, čím se liší,
-  časová osa epizod, laboratoře, podobní pacienti, posouzení lékařem, přechod do analýzy. Vysvětlivky jsou dole.
+  *Spolehlivost*). Kliknutím na řádek se otevře detail: souhrn (kratší/delší než očekávání, tři hodnoty, z kolika
+  pobytů a vůči kolika pacientům), srovnávací skupina s grafem, co ověřit v kontextu, podklady a dostupnost dat,
+  posouzení lékařem (formulář v okně) a podrobnosti výpočtu na vyžádání; záložky Epizody péče, Laboratoř,
+  Podobní pacienti, Nádor a data. Vysvětlivky přehledu jsou dole.
 - **Analýza odchylek** – volba ukazatelů/škály/prahu, oddělené role „zobrazit vybrané“ × „použít jako referenci“,
   rozložení odchylek s výběrem bodů, seřazené neobvyklé případy, **skupiny uvnitř outlierů** s popisem vůči
   referenci, kontext charakteristik, uložení/načtení pohledu a export.
@@ -52,7 +54,7 @@ Po instalaci závislostí nepotřebuje síť.
 
 ## Testy a kontroly
 ```powershell
-python -m uv run pytest                                  # 41 testů vč. AppTest průchodů UI
+python -m uv run pytest                                  # 42 testů vč. AppTest průchodů UI
 python -m uv run ruff check . ; python -m uv run ruff format --check .
 python -m uv run python scripts/check_real_data.py       # strukturální kontrola na skutečných datech (bez výpisu pacientů)
 python -m uv run python scripts/profile_data.py          # profil dat do runtime/profile/

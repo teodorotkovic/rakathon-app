@@ -51,7 +51,7 @@ class EpisodeClass(StrEnum):
 EPISODE_CLASS_LABELS = {
     EpisodeClass.OUTPATIENT: "Ambulantní kontakt",
     EpisodeClass.INPATIENT: "Dokončená hospitalizace",
-    EpisodeClass.OPEN: "Hospitalizace bez známého propuštění",
+    EpisodeClass.OPEN: "Pobyt bez zaznamenaného data propuštění",
     EpisodeClass.INVALID: "Neplatný interval (konec před začátkem)",
 }
 

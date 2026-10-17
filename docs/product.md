@@ -16,7 +16,7 @@ detailu.
 ## Hlavní pracovní postup (implementováno)
 1. **Pacienti:** seřazený seznam podle míry odchylky hlavního ukazatele vůči očekávání.
 2. **Detail:** v čem a vůči komu je pacient neobvyklý (vysvětlení A/B/C), s čísly z výpočtu.
-3. **Kontext:** časová osa epizod (body/intervaly/neuzavřené pobyty), diagnózy, laboratoře, podobní pacienti.
+3. **Kontext:** časová osa epizod (body/intervaly/pobyty bez zaznamenaného data propuštění), diagnózy, laboratoře, podobní pacienti.
 4. **Analýza odchylek:** stejný pacient v rozložení celé kohorty, změna ukazatelů/prahu/reference.
 5. **Skupiny:** shlukování uvnitř outlierů a popis společných charakteristik vůči referenci.
 6. **Zpětná vazba:** posouzení + komentář (uloženo), navržení vyřazení chybných dat z výpočtu, uložení pohledu,

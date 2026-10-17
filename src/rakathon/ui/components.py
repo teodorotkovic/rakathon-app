@@ -58,11 +58,14 @@ def review_status_options() -> list[str]:
     return [s.value for s in ReviewStatus]
 
 
-def review_panel(pid: str, analysis_id: str, analysis_label: str, key_prefix: str) -> None:
-    """Formulář posouzení s explicitním uložením + oddělená historie."""
+def _review_history_split(pid: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     g = state.global_results()
-    reviews = state.reviews_all()
-    hist_cur, hist_other = split_history(reviews, pid, g.dataset_fingerprint, g.baseline_config_id)
+    return split_history(state.reviews_all(), pid, g.dataset_fingerprint, g.baseline_config_id)
+
+
+def review_panel(pid: str, analysis_id: str, analysis_label: str, key_prefix: str) -> None:
+    """Formulář posouzení s explicitním uložením + oddělená historie (použito v Analýze odchylek)."""
+    hist_cur, hist_other = _review_history_split(pid)
     current = hist_cur.iloc[0] if len(hist_cur) else None
     status_now = current["status"] if current is not None else ReviewStatus.NOT_REVIEWED.value
     st.markdown(f"**Aktuální posouzení:** {review_label(status_now)}")
@@ -74,7 +77,55 @@ def review_panel(pid: str, analysis_id: str, analysis_label: str, key_prefix: st
         )
         if current["comment"]:
             st.markdown(f"> {current['comment']}".replace("\n", "\n> "))
+    _review_form(pid, analysis_id, analysis_label, key_prefix, current)
+    _review_history(hist_cur, hist_other)
 
+
+def review_card(pid: str) -> None:
+    """Kompaktní karta: stav, poslední komentář a tlačítko otevírající formulář v dialogu."""
+    hist_cur, hist_other = _review_history_split(pid)
+    current = hist_cur.iloc[0] if len(hist_cur) else None
+    if current is None:
+        st.markdown("● Dosud neposouzeno")
+    else:
+        st.markdown(f"● **{review_label(current['status'])}**")
+        st.caption(
+            f"{current['created_at'][:16].replace('T', ' ')} UTC"
+            + (f" · {current['reviewer']}" if current["reviewer"] else "")
+        )
+        if current["comment"]:
+            st.markdown(f"> {current['comment']}".replace("\n", "\n> "))
+    if len(hist_other):
+        st.caption(f"Starší posouzení z jiného nastavení výpočtu: {len(hist_other)} (v historii).")
+    st.button(
+        "Posoudit případ",
+        key=f"open_review_{pid}",
+        type="primary",
+        width="stretch",
+        on_click=state.open_dialog,
+        args=(f"review:{pid}",),
+    )
+
+
+@st.dialog("Posouzení případu", width="large", on_dismiss=state.close_dialog)
+def review_dialog(pid: str, analysis_id: str, analysis_label: str) -> None:
+    hist_cur, hist_other = _review_history_split(pid)
+    current = hist_cur.iloc[0] if len(hist_cur) else None
+    st.markdown(f"**Pacient {pid}**")
+    _review_form(pid, analysis_id, analysis_label, "dlg", current, close_dialog=True)
+    _review_history(hist_cur, hist_other)
+
+
+def _review_form(
+    pid: str,
+    analysis_id: str,
+    analysis_label: str,
+    key_prefix: str,
+    current: pd.Series | None,
+    close_dialog: bool = False,
+) -> None:
+    g = state.global_results()
+    status_now = current["status"] if current is not None else ReviewStatus.NOT_REVIEWED.value
     options = review_status_options()
     with st.form(key=f"{key_prefix}_review_{pid}_{state.nonce()}", clear_on_submit=False):
         status = st.radio(
@@ -116,8 +167,12 @@ def review_panel(pid: str, analysis_id: str, analysis_label: str, key_prefix: st
             state.flash(
                 "success", f"Posouzení pacienta {pid} uloženo ({REVIEW_LABELS[ReviewStatus(status)]})."
             )
+            if close_dialog:
+                state.close_dialog()
             st.rerun()
 
+
+def _review_history(hist_cur: pd.DataFrame, hist_other: pd.DataFrame) -> None:
     if len(hist_cur) or len(hist_other):
         with st.expander(f"Historie posouzení ({len(hist_cur)} v tomto kontextu, {len(hist_other)} jinde)"):
             cols = ["created_at", "status", "comment", "reviewer", "analysis_label"]

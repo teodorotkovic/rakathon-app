@@ -141,7 +141,12 @@ def explain_flag(
                 "Pozorováno": d.observed,
                 "Očekávání": d.expected,
                 "Rozdíl (dny)": d.residual,
-                "Relativní rozdíl": (np.expm1(d.log_residual) if pd.notna(d.log_residual) else np.nan),
+                # (pozorováno − očekávání) / očekávání; NE expm1(log_residual), to je poměr (1+pozor.)/(1+oček.)
+                "Relativní rozdíl": (
+                    d.residual / d.expected
+                    if pd.notna(d.residual) and pd.notna(d.expected) and d.expected > 0
+                    else np.nan
+                ),
                 "Standardizovaná odchylka": d.z,
                 "Rozhoduje o označení": "ano" if (bool(score_row["scored"]) and d.is_driver) else "",
                 "Pobytů ve výpočtu": d.support_n,

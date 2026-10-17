@@ -21,13 +21,22 @@ Aktualizováno: 2026-10-17, větev `main`, soukromý repozitář `teodorotkovic/
 - Zjednodušená stránka Pacienti: místo technické lišty dvě věty „co sledujeme / s kým porovnáváme“, metriky
   *Lze porovnat* a *Neobvyklé případy*, sloupce *Spolehlivost* a *Podobných pacientů*, otevření detailu
   kliknutím do řádku (bez zaškrtávacích polí a bez výběru podle ID), vysvětlivky pod tabulkou.
+- Přestavěný detail pacienta (postupné odkrývání): drobečková navigace, souhrnná karta (věta o směru, stav
+  „Práh odchylky překročen/nepřekročen“, tři hodnoty, počty pobytů a srovnávaných pacientů), záložka Přehled se
+  čtyřmi kartami (srovnávací skupina s grafem a rozbalovacím „Jak vzniklo očekávání a označení“; Co ověřit
+  v kontextu; Posouzení lékařem s formulářem v dialogu; Podklady a dostupnost). Skóre, log škála, citlivost
+  a technická ID jsou jen v rozbalovacím detailu.
+- **Oprava:** „Relativní rozdíl“ v detailu výpočtu byl `expm1(log1p rozdílu)`, tj. poměr (1 + pozorováno) /
+  (1 + očekávání) − 1 (např. −57,9 % místo −73,3 % pro 1 vs. 3,75 dne). Nyní (pozorováno − očekávání) /
+  očekávání; test `test_relative_difference_is_against_expectation_not_log1p`.
+- Terminologie: „pobyt bez zaznamenaného data propuštění“ místo „neuzavřená hospitalizace“.
 
 ## Provedené kontroly (2026-10-16/17)
 | Kontrola | Výsledek |
 |---|---|
 | `python -m uv sync` (Python 3.12.6, streamlit 1.66.0, pandas 3.0.6, numpy 2.5.4, plotly 7.1.0, scikit-learn 1.9.1) | OK |
 | `python -m uv sync --locked` | OK |
-| `python -m uv run pytest` | 41 passed (AppTest: jednoduchý přehled, lékařský průchod, globální přepočet přes dialog, jednoduchý panel + upozornění, dialog importu, reset pohledu, obrazovka bez dat; mapování kliku do buňky na pacienta) |
+| `python -m uv run pytest` | 42 passed; detail pacienta ověřen AppTestem i snímky (jen testovací syntetická CSV) – (AppTest: jednoduchý přehled, lékařský průchod, globální přepočet přes dialog, jednoduchý panel + upozornění, dialog importu, reset pohledu, obrazovka bez dat; mapování kliku do buňky na pacienta) |
 | Vizuální kontrola stránky Pacienti (jen testovací syntetická CSV): přehled bez zaškrtávacích polí, klik do buňky otevře detail téhož pacienta | OK |
 | Ridge vs. peer medián na skutečných datech | 107/157 hodnoceno u obou; medián \|rozdílu\| 1,13 vs. 1,25 dne; Ridge ~8 s výpočtu |
 | `python -m uv run ruff check .` | All checks passed |

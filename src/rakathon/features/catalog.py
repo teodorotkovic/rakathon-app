@@ -226,8 +226,8 @@ BUILTIN_FEATURES: list[FeatureSpec] = [
     ),
     _F(
         "n_inpatient_open",
-        "Neuzavřené hospitalizace",
-        "Hospitalizace bez známého propuštění.",
+        "Pobyty bez data propuštění",
+        "Pobyty bez zaznamenaného data propuštění (nevíme, zda hospitalizace pokračuje).",
         "numeric",
         R.DESCRIPTOR,
         "episodes.csv",

@@ -167,7 +167,7 @@ def _validate_episodes(e: pd.DataFrame, p: pd.DataFrame | None, c: _Collector) -
           "day_end < day_start – neplatný interval; ponechán v auditu, nepoužije se jako délka.",
           de_num < ds_num, eid)
     c.add(Severity.INFO, t, "day_end", "open_stay",
-          "Hospitalizace bez známého propuštění (day_end chybí) – délka se nedoplňuje.", de == "", eid)
+          "Pobyt bez zaznamenaného data propuštění (day_end chybí) – délka se nedoplňuje.", de == "", eid)
     dx = e["dx_main"].str.strip()
     c.add(Severity.INFO, t, "dx_main", "missing", "Hlavní diagnóza epizody není kódována.", dx == "", eid)
     c.add(Severity.WARNING, t, "dx_main", "pattern", "dx_main neodpovídá tvaru MKN-10.",

@@ -65,14 +65,25 @@ def test_full_doctor_flow(app, tmp_path):
 
     pid = _open_first_patient(at)
     assert not at.exception, [e.value for e in at.exception]
-    assert at.subheader[0].value == f"Pacient {pid}"
-    assert any("S čím pacienta porovnáváme" in m.value for m in at.markdown)
+    assert at.header[0].value == f"Pacient {pid}"
+    assert not any(t.value == "Pacienti" for t in at.title)  # v detailu jen drobečková navigace
+    assert [m.label for m in at.metric][:3] == [
+        "Typická délka pobytu · medián",
+        "Očekávání podle srovnání",
+        "Rozdíl oproti očekávání",
+    ]
+    assert any("Pacient a srovnávací skupina" in m.value for m in at.markdown)
+    assert any("Co ověřit v kontextu pacienta" in m.value for m in at.markdown)
+    assert any("Podklady a dostupnost" in m.value for m in at.markdown)
+    assert any("Dosud neposouzeno" in m.value for m in at.markdown)
 
+    _button(at, "Posoudit případ").click().run()  # formulář se otevře v dialogu
     at.radio[0].set_value("clinically_interesting")
     at.text_area[0].input("Ověřit s mentorem: dlouhé pobyty, „D70“, čárka, nový\nřádek")
     _button(at, "Uložit posouzení").click().run()
     assert not at.exception, [e.value for e in at.exception]
-    assert any("Klinicky zajímavé" in m.value for m in at.markdown if "Aktuální posouzení" in m.value)
+    assert not any(b.label == "Uložit posouzení" for b in at.button)  # dialog zavřen
+    assert any("Klinicky zajímavé" in m.value for m in at.markdown)
 
     at.button(key="detail_to_analysis").click().run()
     assert not at.exception, [e.value for e in at.exception]
@@ -88,7 +99,7 @@ def test_full_doctor_flow(app, tmp_path):
 
     at.button(key="dv_open_detail").click().run()
     assert not at.exception, [e.value for e in at.exception]
-    assert at.subheader[0].value == f"Pacient {pid}"
+    assert at.header[0].value == f"Pacient {pid}"
     assert any("Z pohledu" in c.value for c in at.caption)  # lokální skóre označené názvem pohledu
 
     runtime = tmp_path / "runtime"
@@ -110,6 +121,7 @@ def test_full_doctor_flow(app, tmp_path):
 def test_global_recompute_creates_new_context(app):
     at = app
     _open_first_patient(at)
+    _button(at, "Posoudit případ").click().run()
     _button(at, "Uložit posouzení").click().run()  # posouzení ve výchozím globálním kontextu
     assert not any("Rozklad predikce modelu" in c.value for c in at.caption)
 
@@ -124,7 +136,9 @@ def test_global_recompute_creates_new_context(app):
     assert any("Rozklad predikce modelu" in c.value for c in at.caption)  # nová metoda je aktivní
     assert at.session_state["baseline_config"].method == "ridge_loo"
     # posouzení z předchozího kontextu není aktuální, jen v historii
-    assert any("Neposouzeno" in m.value for m in at.markdown if "Aktuální posouzení" in m.value)
+    assert any("Dosud neposouzeno" in m.value for m in at.markdown)
+    assert any("Starší posouzení z jiného nastavení výpočtu: 1" in c.value for c in at.caption)
+    _button(at, "Posoudit případ").click().run()
     assert any("1 jinde" in e.label for e in at.expander)
 
 

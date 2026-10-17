@@ -34,21 +34,16 @@ def reference_strip(
     expected: float,
     q1: float,
     q3: float,
-    metric_label: str,
+    x_title: str,
     direction: str,
     patient_id: str,
 ) -> go.Figure:
+    """Pacient (výrazný bod) vůči srovnávaným pacientům (šedé body), pásmo kvartilů a očekávání (čára)."""
+    from rakathon.formatting import fmt_days
+
     fig = go.Figure()
     if not np.isnan(q1) and not np.isnan(q3):
-        fig.add_vrect(
-            x0=q1,
-            x1=q3,
-            fillcolor=REFERENCE,
-            opacity=0.35,
-            line_width=0,
-            annotation_text="kvartily reference",
-            annotation_position="top left",
-        )
+        fig.add_vrect(x0=q1, x1=q3, fillcolor=REFERENCE, opacity=0.35, line_width=0)
     fig.add_trace(
         go.Scatter(
             x=peer_values.to_numpy(),
@@ -57,14 +52,14 @@ def reference_strip(
             name="srovnávaní pacienti",
             marker=dict(color=NEUTRAL, size=9, opacity=0.8),
             customdata=peer_values.index.to_numpy(),
-            hovertemplate="%{customdata}: %{x} dní<extra>reference</extra>",
+            hovertemplate="%{customdata}: %{x} dní<extra>srovnávaný pacient</extra>",
         )
     )
     if not np.isnan(expected):
         fig.add_vline(
             x=expected,
             line=dict(color=HIGHLIGHT, dash="dash"),
-            annotation_text=f"očekávání {expected:g}",
+            annotation_text=f"Očekávání · {fmt_days(expected)}",
             annotation_position="bottom right",
         )
     if not np.isnan(patient_value):
@@ -80,15 +75,15 @@ def reference_strip(
                     symbol=SYMBOL.get(direction, "circle"),
                     line=dict(color=HIGHLIGHT, width=1.5),
                 ),
-                text=[patient_id],
+                text=[f"Pacient · {fmt_days(patient_value)}"],
                 textposition="top center",
                 hovertemplate=f"{patient_id}: %{{x}} dní<extra>{DIR_TEXT.get(direction, '')}</extra>",
             )
         )
     fig.update_layout(
-        **{**LAYOUT, "height": 230},
-        title=f"{metric_label} – pacient vs. referenční pacienti",
-        xaxis_title="dny (pacientská hodnota ukazatele)",
+        **{**LAYOUT, "height": 220, "margin": dict(l=10, r=10, t=20, b=10)},
+        showlegend=False,
+        xaxis_title=x_title,
         yaxis=dict(visible=False, range=[-1, 1]),
     )
     return fig
@@ -98,7 +93,7 @@ TIMELINE_ROWS = [
     "Ambulantní kontakt",
     "Hospitalizace – ve výpočtu",
     "Hospitalizace – ostatní",
-    "Hospitalizace bez propuštění",
+    "Pobyt bez data propuštění",
     "Neplatný interval",
 ]
 
@@ -174,7 +169,7 @@ def timeline(eps: pd.DataFrame, selected_ids: set[str], anchor_day: float | None
                     x=sub["day_start_num"].astype(float),
                     y=sub["row"],
                     mode="markers",
-                    name=row + (" (konec neznámý)" if symbol.startswith("triangle") else ""),
+                    name=row + (" (délka neznámá)" if symbol.startswith("triangle") else ""),
                     marker=dict(color=HIGHLIGHT, size=11, symbol=symbol),
                     customdata=cd(sub),
                     hovertemplate=hover,

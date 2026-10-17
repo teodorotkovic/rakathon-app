@@ -29,7 +29,6 @@ AGE_ORDER = ["0-5", "6-8", "9-11", "12-14", "15-17", "18-20"]
 
 
 def render() -> None:
-    st.title("Pacienti")
     state.show_flash()
     g = state.global_results()
     a = state.default_analysis()
@@ -40,6 +39,7 @@ def render() -> None:
     if pid:
         render_detail(pid, g, a)
     else:
+        st.title("Pacienti")
         render_overview(g, a)
 
 
@@ -327,187 +327,362 @@ def _export_button(
 
 
 def render_detail(pid: str, g: GlobalResults, a: AnalysisResult) -> None:
-    if st.button("← Zpět na seznam", key="detail_back"):
-        st.session_state[state.K_SELECTED] = None
-        st.session_state[state.K_FROM_ANALYSIS] = False
-        state.bump_nonce()
-        st.rerun()
     core = g.core.set_index("patient_id").loc[pid]
     t = g.patient_table.set_index("patient_id").loc[pid]
     res = g.results_long[g.results_long["patient_id"] == pid].set_index("metric_id")
     srow = a.scores.set_index("patient_id").loc[pid]
-    main = a.config.metrics[0]
-    r = res.loc[main]
+    r = res.loc[a.config.metrics[0]]
 
-    st.subheader(f"Pacient {pid}")
-    st.markdown(
-        f"**{core['dx_icd10']}** · {core['dx_group_label'] if core['dx_group'] else 'diagnóza nezařazena do skupiny'} · "
-        f"věková skupina {core['age_group']} · pohlaví {core['sex']}"
-        + (" · ⚠ více nádorů – vyřazen z baseline" if core["multi_tumor"] else "")
-    )
-    c = st.columns(5)
-    c[0].metric(
-        g.metric_labels[main],
-        components.metric_value(r["observed"]),
-        help=f"{g.metric_long_labels[main]}. Vychází z {int(r['support_n'])} pobytů.",
-    )
-    c[1].metric(
-        "Očekávání", components.metric_value(r["expected"]), help="Medián stejného ukazatele u reference."
-    )
-    c[2].metric("Rozdíl", fmt_signed_days(r["residual"]) if pd.notna(r["residual"]) else "–")
-    c[3].metric(
-        "Míra odchylky",
-        fmt_num(srow["score"], 2) if srow["scored"] else "nelze porovnat",
-        help=f"Neobvyklý případ od hodnoty {fmt_num(a.config.threshold)} (pracovní hranice).",
-    )
-    n_ref = int(r["reference_n"])
-    c[4].metric(
-        "Podobných pacientů",
-        str(n_ref) if n_ref else "–",
-        help=components.support_text(r) + (f" – {r['baseline_reason']}" if r["baseline_reason"] else ""),
-    )
-    if srow["scored"]:
-        st.markdown(
-            f"**{srow['band'].capitalize()}** · {components.direction_text(srow['direction'])}"
-            + (f" · ⚠ {srow['support_notes']}" if srow["support_notes"] else "")
-        )
-    else:
-        st.info(f"Pacienta nelze porovnat: {srow['not_scored_reason']}")
-
-    if st.session_state.get(state.K_FROM_ANALYSIS):
-        la = state.local_analysis()
-        if la.analysis_id != a.analysis_id:
-            ls = la.scores.set_index("patient_id").loc[pid]
-            st.caption(
-                f"Z pohledu **Analýza odchylek** (hranice {fmt_num(la.config.threshold)}, "
-                f"ukazatele: {', '.join(g.metric_labels[m] for m in la.config.metrics)}): "
-                + (
-                    f"míra odchylky {fmt_num(ls['score'], 2)}, {ls['band']}"
-                    if ls["scored"]
-                    else "nelze porovnat"
-                )
-                + ". Očekávání je stejné jako zde."
-            )
-
-    left, right = st.columns([2.3, 1])
-    with left:
-        tabs = st.tabs(["Proč je neobvyklý", "Časová osa", "Laboratoře", "Podobní pacienti", "Nádor a data"])
-        with tabs[0]:
-            _tab_explanation(pid, g, a, res, srow)
-        with tabs[1]:
-            _tab_timeline(pid, g, t)
-        with tabs[2]:
-            _tab_labs(pid)
-        with tabs[3]:
-            _tab_similar(pid, g, a)
-        with tabs[4]:
-            _tab_tumour(pid, g, core, t)
-    with right:
-        st.markdown("#### Posouzení lékařem")
-        components.review_panel(pid, a.analysis_id, "Pacienti – výchozí pohled", "pt")
-        st.divider()
+    head, action = st.columns([5, 1.6], vertical_alignment="bottom")
+    with head:
+        if st.button("Pacienti", key="detail_back", type="tertiary", icon=":material/arrow_back:"):
+            st.session_state[state.K_SELECTED] = None
+            st.session_state[state.K_FROM_ANALYSIS] = False
+            state.bump_nonce()
+            st.rerun()
+        st.header(f"Pacient {pid}", anchor=False)
+        st.caption(_patient_subtitle(core))
+    with action:
         if st.button(
-            "Prozkoumat v analýze odchylek",
-            key="detail_to_analysis",
-            icon=":material/query_stats:",
-            type="primary",
-            width="stretch",
+            "Prozkoumat odchylky", key="detail_to_analysis", icon=":material/query_stats:", width="stretch"
         ):
             st.session_state[state.K_INVESTIGATED] = [pid]
             st.session_state[state.K_FOCUS] = pid
             st.switch_page(state.DEVIATIONS_PAGE)
-        st.caption("Přenese pacienta jako vyšetřovaný výběr; globální očekávání se nepřepočítává.")
-        components.exclusion_button(pid, "pt")
+
+    _summary_card(pid, g, a, r, srow, core)
+
+    tabs = st.tabs(["Přehled", "Epizody péče", "Laboratoř", "Podobní pacienti", "Nádor a data"])
+    with tabs[0]:
+        _tab_overview(pid, g, a, res, srow, core, t)
+    with tabs[1]:
+        _tab_timeline(pid, g, t)
+    with tabs[2]:
+        _tab_labs(pid)
+    with tabs[3]:
+        _tab_similar(pid, g, a)
+    with tabs[4]:
+        _tab_tumour(pid, g, core, t)
+
+    if st.session_state.get(state.K_DIALOG) == f"review:{pid}":
+        components.review_dialog(pid, a.analysis_id, "Pacienti – výchozí pohled")
 
 
-def _tab_explanation(pid, g: GlobalResults, a: AnalysisResult, res: pd.DataFrame, srow: pd.Series) -> None:
-    st.markdown("##### A. S čím pacienta porovnáváme")
-    for m in g.baseline.config.outcomes:
-        st.markdown(explain_expectation(res.loc[m], g.metric_labels[m]))
+def _patient_subtitle(core: pd.Series) -> str:
+    adult = core["age_group"] == "18-20"
+    sex = {"F": "žena" if adult else "dívka", "M": "muž" if adult else "chlapec"}.get(
+        core["sex"], "pohlaví neuvedeno"
+    )
+    age = f"{core['age_group'].replace('-', '–')} let při diagnóze" if core["age_group"] else "věk neuveden"
+    parts = [f"Diagnóza {core['dx_icd10'] or 'neuvedena'}", age, sex]
+    if core["multi_tumor"]:
+        parts.append("více nádorů – nevstupuje do výpočtu")
+    return " · ".join(parts)
+
+
+def _count_phrase(n: int, one: str, few: str, many: str) -> str:
+    return f"{n} {one if n == 1 else few if 2 <= n <= 4 else many}"
+
+
+def _scope_text(rule: str, core: pd.Series) -> str:
+    if rule == "exact_dx_match" or not core["dx_group"]:
+        return f"Pouze pobyty s hlavní diagnózou {core['dx_icd10']}"
+    if rule == "group_dx_match":
+        return f"Pobyty s diagnózou ze skupiny {core['dx_group_label']}"
+    return "Všechny pobyty od prvního záznamu nádoru"
+
+
+def _summary_card(
+    pid: str, g: GlobalResults, a: AnalysisResult, r: pd.Series, srow: pd.Series, core: pd.Series
+) -> None:
+    observed, expected, residual = r["observed"], r["expected"], r["residual"]
+    if pd.isna(observed):
+        headline = "Pacienta nelze porovnat – chybí započitatelné pobyty"
+    elif pd.isna(expected):
+        headline = "Pacienta nelze porovnat – chybí srovnatelní pacienti"
+    elif residual < 0:
+        headline = "Zaznamenané pobyty jsou kratší než očekávání"
+    elif residual > 0:
+        headline = "Zaznamenané pobyty jsou delší než očekávání"
+    else:
+        headline = "Zaznamenané pobyty odpovídají očekávání"
+    with st.container(border=True):
+        h1, h2 = st.columns([3, 1.3], vertical_alignment="center")
+        h1.markdown(f"#### {headline}")
+        with h2:
+            if srow["scored"] and srow["outlier"]:
+                st.badge("Práh odchylky překročen", color="orange", icon=":material/flag:")
+            elif srow["scored"]:
+                st.badge("Práh odchylky nepřekročen", color="gray")
+        main = a.config.metrics[0]
+        c = st.columns(3)
+        c[0].metric(
+            "Typická délka pobytu · medián" if main == "median_los_dx" else g.metric_labels[main],
+            components.metric_value(observed),
+        )
+        c[1].metric("Očekávání podle srovnání", components.metric_value(expected))
+        c[2].metric("Rozdíl oproti očekávání", fmt_signed_days(residual) if pd.notna(residual) else "–")
+        facts = [
+            _count_phrase(int(r["support_n"]), "dokončený pobyt", "dokončené pobyty", "dokončených pobytů")
+            + " ve výpočtu",
+            _count_phrase(
+                int(r["reference_n"]), "srovnávaný pacient", "srovnávaní pacienti", "srovnávaných pacientů"
+            ),
+            _scope_text(g.baseline.config.episode_rule, core),
+        ]
+        st.caption(" · ".join(facts))
+        if pd.isna(observed) or pd.isna(expected):
+            st.caption(f"Důvod: {srow['not_scored_reason'] or r['evaluability_reason']}")
+        if st.session_state.get(state.K_FROM_ANALYSIS):
+            la = state.local_analysis()
+            if la.analysis_id != a.analysis_id:
+                ls = la.scores.set_index("patient_id").loc[pid]
+                st.caption(
+                    f"Z pohledu **Analýza odchylek** (hranice {fmt_num(la.config.threshold)}, "
+                    f"ukazatele: {', '.join(g.metric_labels[m] for m in la.config.metrics)}): "
+                    + (
+                        "práh překročen"
+                        if ls["scored"] and ls["outlier"]
+                        else "práh nepřekročen"
+                        if ls["scored"]
+                        else "nelze porovnat"
+                    )
+                    + ". Očekávání je stejné jako zde."
+                )
+
+
+def _tab_overview(
+    pid,
+    g: GlobalResults,
+    a: AnalysisResult,
+    res: pd.DataFrame,
+    srow: pd.Series,
+    core: pd.Series,
+    t: pd.Series,
+) -> None:
+    left, right = st.columns([2, 1.1], gap="medium")
+    with left:
+        _comparison_card(pid, g, a, res, srow, core)
+        _context_card(pid, g, a, res, t)
+    with right:
+        with st.container(border=True):
+            st.markdown("#### Posouzení lékařem")
+            components.review_card(pid)
+        _data_card(pid, g, a, res, core, t)
+
+
+def _reference_sentence(r: pd.Series, core: pd.Series, g: GlobalResults) -> str:
+    if isinstance(r.get("model_detail"), str) and r["model_detail"]:
+        return (
+            "Odhad statistického modelu z diagnózy, věku a pohlaví; v grafu jsou pacienti se stejnou skupinou "
+            "diagnózy."
+        )
+    if pd.isna(r["reference_level"]):
+        return r["baseline_reason"] or "Srovnatelní pacienti nejsou k dispozici."
+    keys = g.baseline.config.hierarchy[int(r["reference_level"]) - 1]
+    pieces = {
+        "dx_icd10": f"diagnóza {core['dx_icd10']}",
+        "dx_group": f"skupina diagnóz ({core['dx_group_label']})",
+        "age_group": f"věková skupina {core['age_group'].replace('-', '–')} let",
+        "sex": "pohlaví",
+    }
+    used = [pieces[k] for k in keys]
+    text = "Stejná " + (used[0] if len(used) == 1 else ", ".join(used[:-1]) + " a " + used[-1]) + "."
+    missing = []
+    if "dx_icd10" not in keys:
+        missing.append(("Přesná diagnóza", "a"))
+    if "age_group" not in keys:
+        missing.append(("Věk", ""))
+    if "sex" not in keys:
+        missing.append(("pohlaví" if missing else "Pohlaví", "o"))
+    if len(missing) == 1:
+        text += f" {missing[0][0]} není samostatně zohledněn{missing[0][1]}."
+    elif missing:
+        names = [m[0] for m in missing]
+        text += " " + ", ".join(names[:-1]) + " a " + names[-1].lower() + " nejsou samostatně zohledněny."
+    return text
+
+
+def _comparison_card(
+    pid, g: GlobalResults, a: AnalysisResult, res: pd.DataFrame, srow: pd.Series, core
+) -> None:
     main = a.config.metrics[0]
     r = res.loc[main]
     peers = [p for p in str(r["reference_ids"]).split(";") if p]
-    is_model = isinstance(r.get("model_detail"), str) and bool(r.get("model_detail"))
-    if is_model:
-        st.caption(
-            f"Rozklad predikce modelu pro „{g.metric_labels[main]}“ (stejný leave-one-out fit, který vydal "
-            "očekávání; součet příspěvků v log1p škále = predikce)."
-        )
-        st.dataframe(
-            model_terms_table(json.loads(r["model_detail"])),
-            hide_index=True,
-            width="stretch",
-            column_config={
-                "Příspěvek (log1p)": st.column_config.NumberColumn(format="%+.3f"),
-                "Násobek (1 + délka)": st.column_config.NumberColumn(format="×%.2f"),
-            },
-        )
-    peer_word = "pacientů se stejnou diagnostickou kategorií" if is_model else "referenčních pacientů"
-    if peers:
-        vals = g.results_long[
-            (g.results_long["metric_id"] == main) & g.results_long["patient_id"].isin(peers)
-        ]
-        fig = charts.reference_strip(
-            vals.set_index("patient_id")["observed"],
-            float(r["observed"]),
-            float(r["expected"]),
-            float(r["ref_q1"]),
-            float(r["ref_q3"]),
-            g.metric_labels[main],
-            srow["direction"] if srow["scored"] else "",
-            pid,
-        )
-        st.plotly_chart(fig, key=f"refstrip_{pid}", width="stretch")
-        st.caption(
-            f"Body = {len(peers)} {peer_word} (jeden bod = jeden pacient). Šedé pásmo = kvartily "
-            "(rozložení pozorovaných hodnot, ne predikční interval)."
-        )
+    with st.container(border=True):
+        st.markdown("#### Pacient a srovnávací skupina")
+        st.caption(_reference_sentence(r, core, g))
+        if peers and pd.notna(r["observed"]):
+            vals = g.results_long[
+                (g.results_long["metric_id"] == main) & g.results_long["patient_id"].isin(peers)
+            ]
+            direction = srow["direction"] if srow["scored"] else ""
+            fig = charts.reference_strip(
+                vals.set_index("patient_id")["observed"],
+                float(r["observed"]),
+                float(r["expected"]),
+                float(r["ref_q1"]),
+                float(r["ref_q3"]),
+                f"{g.metric_labels[main]} pacienta (dny)",
+                direction,
+                pid,
+            )
+            st.plotly_chart(fig, key=f"refstrip_{pid}", width="stretch", config={"displayModeBar": False})
+            st.caption(
+                f"Šedé pásmo: prostředních 50 % pacientských hodnot ({fmt_num(r['ref_q1'])}–{fmt_num(r['ref_q3'])} "
+                "dní). Nejde o predikční interval."
+            )
+        if pd.notna(r["residual"]) and r["residual"] < 0:
+            st.info("Kratší zaznamenaný pobyt sám o sobě neznamená příznivější zdravotní výsledek.")
+        elif pd.notna(r["residual"]) and r["residual"] > 0:
+            st.info(
+                "Delší zaznamenaný pobyt sám o sobě neznamená horší zdravotní výsledek; příčiny posoudí lékař."
+            )
+        with st.expander("Jak vzniklo očekávání a označení"):
+            for m in g.baseline.config.outcomes:
+                st.markdown(explain_expectation(res.loc[m], g.metric_labels[m]))
+            if isinstance(r.get("model_detail"), str) and r["model_detail"]:
+                st.caption(
+                    f"Rozklad predikce modelu pro „{g.metric_labels[main]}“ (stejný leave-one-out fit, který vydal "
+                    "očekávání; součet příspěvků v log1p škále = predikce)."
+                )
+                st.dataframe(
+                    model_terms_table(json.loads(r["model_detail"])),
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "Příspěvek (log1p)": st.column_config.NumberColumn(format="%+.3f"),
+                        "Násobek (1 + délka)": st.column_config.NumberColumn(format="×%.2f"),
+                    },
+                )
+            st.markdown("**Označení odchylky**")
+            ex = explain_flag(srow, a.dims[a.dims["patient_id"] == pid], a.config, g.metric_labels)
+            st.markdown(ex["summary"])
+            st.dataframe(
+                ex["table"],
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "Pozorováno": st.column_config.NumberColumn(format="%.1f"),
+                    "Očekávání": st.column_config.NumberColumn(format="%.1f"),
+                    "Rozdíl (dny)": st.column_config.NumberColumn(format="%+.1f"),
+                    "Relativní rozdíl": st.column_config.NumberColumn(
+                        format="percent", help="(pozorováno − očekávání) / očekávání"
+                    ),
+                    "Standardizovaná odchylka": st.column_config.NumberColumn(format="%+.2f"),
+                },
+            )
+            if ex["counterfactual"]:
+                st.caption(ex["counterfactual"])
+            st.caption(
+                f"Technické údaje: nastavení `{g.baseline_config_id}`, pohled `{a.analysis_id}`, "
+                f"data `{g.dataset_fingerprint[:12]}`."
+            )
 
-    st.markdown("##### B. Co vyvolává označení")
-    dims = a.dims[a.dims["patient_id"] == pid]
-    ex = explain_flag(srow, dims, a.config, g.metric_labels)
-    st.markdown(ex["summary"])
-    st.dataframe(
-        ex["table"],
-        hide_index=True,
-        width="stretch",
-        column_config={
-            "Pozorováno": st.column_config.NumberColumn(format="%.1f"),
-            "Očekávání": st.column_config.NumberColumn(format="%.1f"),
-            "Rozdíl (dny)": st.column_config.NumberColumn(format="%+.1f"),
-            "Relativní rozdíl": st.column_config.NumberColumn(format="percent"),
-            "Standardizovaná odchylka": st.column_config.NumberColumn(format="%+.2f"),
-        },
-    )
-    if ex["counterfactual"]:
-        st.caption(ex["counterfactual"])
 
-    st.markdown("##### C. Čím se pacient liší od srovnávaných")
-    cat, num = descriptor_columns(g.extra_meta)
-    cat = [c for c in cat if c not in ("dx_icd10", "dx_group_label")]  # u peerů dané výběrem reference
-    if peers:
-        comp = peers
-        comp_label = (
-            f"pacienti se stejnou diagnostickou kategorií ({len(peers)})"
-            if is_model
-            else f"pacienti použití pro očekávání ({len(peers)})"
-        )
-    else:
-        comp = [p for p in g.core["patient_id"] if p != pid]
-        comp_label = f"celá kohorta ({len(comp)}) – srovnatelná reference neexistuje"
-    diff = explain_differences(pid, comp, g.patient_table, cat, num, g.label)
-    st.caption(
-        f"Srovnávací množina: {comp_label}. Deskriptivní souvislosti = hypotézy k ověření, ne příčiny "
-        "ani prognostické faktory. Řazeno podle neobvyklosti hodnoty pacienta v této množině."
+def _context_card(pid, g: GlobalResults, a: AnalysisResult, res: pd.DataFrame, t: pd.Series) -> None:
+    r = res.loc[a.config.metrics[0]]
+    peers = [p for p in str(r["reference_ids"]).split(";") if p]
+    table = g.patient_table.set_index("patient_id")
+    ref = table.loc[[p for p in peers if p in table.index]]
+    items: list[tuple[str, str, str]] = []
+    keys = (
+        g.baseline.config.hierarchy[int(r["reference_level"]) - 1]
+        if pd.notna(r["reference_level"])
+        and not (isinstance(r.get("model_detail"), str) and r["model_detail"])
+        else ()
     )
-    st.dataframe(diff.head(6).drop(columns="Neobvyklost"), hide_index=True, width="stretch")
-    with st.expander("Všechny srovnávané charakteristiky"):
-        st.dataframe(
-            diff,
-            hide_index=True,
-            width="stretch",
-            column_config={"Neobvyklost": st.column_config.ProgressColumn(min_value=0, max_value=1)},
+    if len(ref) and "age_group" not in keys:
+        same = int((ref["age_group"] == t["age_group"]).sum())
+        items.append(
+            (
+                "Stejná věková skupina v referenci",
+                f"{same} z {len(ref)}",
+                "Reference zahrnuje i pacienty jiného věku. Věkovou srovnatelnost posoudí lékař."
+                if same < len(ref)
+                else "Všichni srovnávaní pacienti jsou ve stejné věkové skupině.",
+            )
         )
+    typical = f" (srovnávaní typicky {fmt_num(ref['n_d70_episodes'].median())})" if len(ref) else ""
+    items.append(
+        (
+            "Epizody s hlavním kódem D70",
+            f"{int(t['n_d70_episodes'])}{typical}",
+            "Počet kódovaných epizod není automaticky počet samostatných komplikací.",
+        )
+    )
+    other = int(t["n_inpatient_completed"]) - int(t["n_stays_included"])
+    typical = ""
+    if len(ref):
+        typical = f" (srovnávaní typicky {fmt_num((ref['n_inpatient_completed'] - ref['n_stays_included']).median())})"
+    items.append(
+        (
+            "Hospitalizace s jinou hlavní diagnózou",
+            f"{other}{typical}",
+            "Mohou zahrnovat komplikace nebo jiné důvody pobytu, které hlavní ukazatel nepočítá.",
+        )
+    )
+    with st.container(border=True):
+        st.markdown("#### Co ověřit v kontextu pacienta")
+        for label, value, note in items:
+            st.markdown(f"{label}: **{value}**  \n:gray[{note}]")
+        with st.expander("Další charakteristiky"):
+            cat, num = descriptor_columns(g.extra_meta)
+            cat = [c for c in cat if c not in ("dx_icd10", "dx_group_label")]
+            comp = peers or [p for p in g.core["patient_id"] if p != pid]
+            st.caption(
+                ("Srovnání se stejnými pacienty jako v grafu" if peers else "Srovnání s celou kohortou")
+                + f" ({len(comp)}). Deskriptivní souvislosti k ověření, ne příčiny ani prognostické faktory; "
+                "neověřené kódy (např. rozsah NOR) a počty vyšetření nejsou biologické charakteristiky."
+            )
+            diff = explain_differences(pid, comp, g.patient_table, cat, num, g.label)
+            st.dataframe(
+                diff,
+                hide_index=True,
+                width="stretch",
+                column_config={"Neobvyklost": st.column_config.ProgressColumn(min_value=0, max_value=1)},
+            )
+
+
+def _data_card(
+    pid, g: GlobalResults, a: AnalysisResult, res: pd.DataFrame, core: pd.Series, t: pd.Series
+) -> None:
+    r = res.loc[a.config.metrics[0]]
+    n_stays = int(r["support_n"])
+    n_labs = int(t["n_lab_results"])
+    notes = []
+    k_open = int(t["n_open_matching_dx"])
+    if k_open:
+        notes.append(
+            f"U {k_open} {'pobytu' if k_open == 1 else 'pobytů'} s diagnózou nádoru chybí datum propuštění. "
+            "Délku nelze určit; ověřte souvislost s hodnoceným průběhem."
+        )
+    elif int(t["n_inpatient_open"]):
+        notes.append(f"U {int(t['n_inpatient_open'])} jiného pobytu chybí datum propuštění.")
+    if n_stays == 1:
+        notes.append("Výsledek stojí na jediném pobytu.")
+    if r["baseline_status"] == "limited_reference":
+        notes.append(f"Srovnání jen s {int(r['reference_n'])} podobnými pacienty.")
+    if int(t["n_invalid_intervals"]):
+        notes.append("Některé pobyty mají konec dříve než začátek – do výpočtu nevstupují.")
+    if core["multi_tumor"]:
+        notes.append("Pacient má v registru více nádorů – do výpočtu očekávání nevstupuje.")
+    with st.container(border=True):
+        st.markdown("#### Podklady a dostupnost")
+        lab_chip = f"{n_labs} lab. výsledků" if n_labs else "bez laboratoří"
+        st.markdown(
+            f":gray-badge[{_count_phrase(n_stays, 'pobyt', 'pobyty', 'pobytů')} ve výpočtu] "
+            f":gray-badge[{lab_chip}]"
+        )
+        if notes:
+            st.warning("\n".join(f"- {n}" for n in notes))
+        else:
+            st.caption("Bez zvláštních omezení dat.")
+        with st.expander("Co zahrnuje výběr"):
+            label, sentence, details = texts.RULE_OPTIONS[g.baseline.config.episode_rule]
+            st.markdown(f"**{label}** – {sentence}")
+            st.caption(details + " Den 0 v datech je první záznam v nemocnici, ne datum diagnózy.")
+        components.exclusion_button(pid, "pt")
 
 
 def _tab_timeline(pid: str, g: GlobalResults, t: pd.Series) -> None:
@@ -527,7 +702,7 @@ def _tab_timeline(pid: str, g: GlobalResults, t: pd.Series) -> None:
         )
     st.caption(
         f"{len(eps)} epizod: {int(t['n_outpatient'])} ambulantních, {int(t['n_inpatient_completed'])} dokončených "
-        f"hospitalizací ({len(selected)} ve výpočtu), {int(t['n_inpatient_open'])} bez propuštění, "
+        f"hospitalizací ({len(selected)} ve výpočtu), {int(t['n_inpatient_open'])} bez zaznamenaného data propuštění, "
         f"{int(t['n_invalid_intervals'])} neplatných intervalů. Rozsah historie {fmt_days(t['history_span_days'])}"
         " (není důkaz úplného sledování)."
         + (" První epizoda je porod (Z38)." if t["first_episode_birth"] else "")
@@ -680,7 +855,7 @@ def _tab_tumour(pid: str, g: GlobalResults, core: pd.Series, t: pd.Series) -> No
     q = [
         ("Epizody bez hlavní diagnózy", int(t["n_dx_missing"])),
         ("Neplatné intervaly", int(t["n_invalid_intervals"])),
-        ("Hospitalizace bez propuštění (shodná dg.)", int(t["n_open_matching_dx"])),
+        ("Pobyty bez zaznamenaného data propuštění (dg. nádoru)", int(t["n_open_matching_dx"])),
         ("Laboratoře mimo epizodu", int(t["n_labs_without_episode"])),
         ("První epizoda = porod (Z38)", "ano" if t["first_episode_birth"] else "ne"),
     ]

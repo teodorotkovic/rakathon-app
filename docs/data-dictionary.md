@@ -39,7 +39,7 @@ případy. Počty jsou vodítko pro kontrolu, v kódu nejsou zadrátované.
 | Pole | Zacházení |
 |---|---|
 | `episode_id` | unikátní; prefix musí odpovídat `patient_id` (jinak blokující chyba); `seq` = pořadí |
-| `day_start`, `day_end` | celé dny od první epizody; `day_end` prázdné = hospitalizace bez propuštění |
+| `day_start`, `day_end` | celé dny od první epizody; `day_end` prázdné = pobyt bez zaznamenaného data propuštění (nevíme, zda pokračuje) |
 | `episode_class` (odvozené) | `outpatient` (end = start), `inpatient_completed` (end > start), `inpatient_open` (end chybí), `invalid_interval` (end < start; audit, nepoužito) |
 | `los_days` (odvozené) | `day_end − day_start` bez +1, jen dokončené hospitalizace; jinak chybí (ne 0) |
 | `dx_main` | hlavní dg. epizody (ne nutně nádor); prázdné = nekódováno |

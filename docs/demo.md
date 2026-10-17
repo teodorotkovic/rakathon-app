@@ -10,12 +10,13 @@ python -m uv run streamlit run app.py --server.address 127.0.0.1
 ## Průchod
 1. **Případ (Pacienti, 45 s).** Přečíst dvě věty nahoře (co sledujeme, s kým porovnáváme), ukázat počty
    *Lze porovnat* a *Neobvyklé případy* a seřazený seznam se sloupcem *Spolehlivost*.
-2. **Vysvětlení (60 s).** Kliknout na první řádek. A: „Očekávání 5 dní = medián 19 pacientů se stejnou diagnózou…
-   věk a pohlaví nejsou zohledněny“. Graf reference. B: rozdíl, standardizovaná odchylka, citlivost prahu,
-   kontrafaktuál. C: čím se liší od srovnávaných (hypotézy). Záložka Časová osa (pobyty ve výpočtu oranžově).
+2. **Vysvětlení (60 s).** Kliknout na řádek. Souhrnná karta: kratší/delší než očekávání, tři hodnoty, počet
+   pobytů a srovnávaných pacientů, stav prahu. Karta „Pacient a srovnávací skupina“ (graf, co nebylo zohledněno),
+   rozbalit „Jak vzniklo očekávání a označení“ jen pro zájemce. „Co ověřit v kontextu“ a „Podklady a dostupnost“.
+   Záložka Epizody péče (pobyty ve výpočtu oranžově).
 3. **Skupina (60 s).** „Prozkoumat v analýze odchylek“ → pacient zvýrazněn. Záložka *Skupinové vzorce*: skupina
    s delšími pobyty a více D70 epizodami vs. referencí, varování o skladbě diagnóz.
-4. **Feedback (45 s).** V panelu posouzení zvolit „Klinicky zajímavé“, komentář, uložit → stav se změní a zůstane
+4. **Feedback (45 s).** „Posoudit případ“ → v okně zvolit „Klinicky zajímavé“, komentář, uložit → stav se změní a zůstane
    po obnovení stránky. Ukázat „Navrhnout vyřazení z výpočtu“ (projeví se až po potvrzení přepočtu v okně
    *Jak počítáme očekávání* v postranním panelu – tam ukázat i volbu metody s nápovědou „?“).
 5. **Změna pohledu (30 s).** Přidat ukazatel „Nejdelší pobyt“ → 2D graf + heatmapa; posunout práh; „Použít jako
