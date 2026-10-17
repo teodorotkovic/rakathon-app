@@ -149,3 +149,11 @@ def validate_analysis_config(cfg: AnalysisConfig) -> None:
         raise ConfigError(f"Neznámá lokální metoda: {cfg.method}")
     if cfg.threshold <= 0:
         raise ConfigError("Práh musí být kladný.")
+    if cfg.cluster_method not in ("hierarchical", "kmeans"):
+        raise ConfigError(f"Neznámý algoritmus shlukování: {cfg.cluster_method}")
+    if cfg.cluster_linkage not in ("ward", "average", "complete"):
+        raise ConfigError(f"Neznámý způsob spojování: {cfg.cluster_linkage}")
+    if cfg.cluster_k is not None and cfg.cluster_k < 2:
+        raise ConfigError("Počet shluků musí být alespoň 2.")
+    if cfg.cluster_min_outliers < 2:
+        raise ConfigError("Shlukování potřebuje alespoň 2 pacienty.")

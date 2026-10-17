@@ -30,13 +30,19 @@ Aktualizováno: 2026-10-17, větev `main`, soukromý repozitář `teodorotkovic/
   (1 + očekávání) − 1 (např. −57,9 % místo −73,3 % pro 1 vs. 3,75 dne). Nyní (pozorováno − očekávání) /
   očekávání; test `test_relative_difference_is_against_expectation_not_log1p`.
 - Terminologie: „pobyt bez zaznamenaného data propuštění“ místo „neuzavřená hospitalizace“.
+- Záložka **Shlukování** v Analýze odchylek (nahradila automatické skupiny – jeden zdroj pro štítky, souhrn
+  i export): volba algoritmu (hierarchické / k-means) s vysvětlením, výběr proměnných (multiselect), počet shluků
+  automaticky podle siluety nebo ručně, způsob spojování, volitelně pacienti těsně pod hranicí; body v prostoru
+  (PCA při ≥ 3 proměnných), dendrogram s řezem, profil shluků; výběr shluku ze seznamu i kliknutím; interpretace
+  „proč shluky vznikly takto“ a „čím je shluk definován“. „Společné rysy“ obsahují jen porovnání charakteristiky.
+- Podobní pacienti v detailu: sloupec „Ve srovnání“ a šedé řádky u pacientů, kteří se do očekávání nezapočítávají.
 
 ## Provedené kontroly (2026-10-16/17)
 | Kontrola | Výsledek |
 |---|---|
 | `python -m uv sync` (Python 3.12.6, streamlit 1.66.0, pandas 3.0.6, numpy 2.5.4, plotly 7.1.0, scikit-learn 1.9.1) | OK |
 | `python -m uv sync --locked` | OK |
-| `python -m uv run pytest` | 42 passed; detail pacienta ověřen AppTestem i snímky (jen testovací syntetická CSV) – (AppTest: jednoduchý přehled, lékařský průchod, globální přepočet přes dialog, jednoduchý panel + upozornění, dialog importu, reset pohledu, obrazovka bez dat; mapování kliku do buňky na pacienta) |
+| `python -m uv run pytest` | 53 passed (vč. `test_clustering.py` a AppTest záložky Shlukování); dříve 42 passed; detail pacienta ověřen AppTestem i snímky (jen testovací syntetická CSV) – (AppTest: jednoduchý přehled, lékařský průchod, globální přepočet přes dialog, jednoduchý panel + upozornění, dialog importu, reset pohledu, obrazovka bez dat; mapování kliku do buňky na pacienta) |
 | Vizuální kontrola stránky Pacienti (jen testovací syntetická CSV): přehled bez zaškrtávacích polí, klik do buňky otevře detail téhož pacienta | OK |
 | Ridge vs. peer medián na skutečných datech | 107/157 hodnoceno u obou; medián \|rozdílu\| 1,13 vs. 1,25 dne; Ridge ~8 s výpočtu |
 | `python -m uv run ruff check .` | All checks passed |

@@ -619,7 +619,10 @@ def group_boxplot(
         **{**LAYOUT, "height": max(280, 90 + 46 * len(order)), "margin": dict(l=10, r=10, t=20, b=20)},
         xaxis=dict(title=value_label, automargin=True),
         yaxis=dict(
-            categoryorder="array", categoryarray=list(reversed(order)), title=None, automargin=True,
+            categoryorder="array",
+            categoryarray=list(reversed(order)),
+            title=None,
+            automargin=True,
             type="category",
         ),
     )
@@ -723,7 +726,9 @@ def deviation_by_group(df: pd.DataFrame, threshold: float, highlight: set[str], 
     pos = {g: i for i, g in enumerate(order)}
     x = df["group_label"].map(pos).to_numpy(dtype=float) + _jitter_for(df["patient_id"])
     fig = go.Figure()
-    fig.add_hrect(y0=-threshold, y1=threshold, fillcolor="rgba(120,135,132,0.13)", line_width=0, layer="below")
+    fig.add_hrect(
+        y0=-threshold, y1=threshold, fillcolor="rgba(120,135,132,0.13)", line_width=0, layer="below"
+    )
     fig.add_hline(y=0, line=dict(color=HIGHLIGHT, width=1))
     _add_category_traces(fig, df, x, df["z"], highlight)
     fig.update_layout(
@@ -745,8 +750,14 @@ def deviation_by_group(df: pd.DataFrame, threshold: float, highlight: set[str], 
         yaxis=dict(title=y_title, zeroline=False, automargin=True),
     )
     fig.add_annotation(
-        x=1, xref="paper", xanchor="right", y=threshold, yanchor="bottom", showarrow=False,
-        text=f"hranice ±{threshold:g}".replace(".", ","), font=dict(size=11, color="#56635F"),
+        x=1,
+        xref="paper",
+        xanchor="right",
+        y=threshold,
+        yanchor="bottom",
+        showarrow=False,
+        text=f"hranice ±{threshold:g}".replace(".", ","),
+        font=dict(size=11, color="#56635F"),
     )
     return fig
 
@@ -775,8 +786,12 @@ def fact_vs_expectation(
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
-            x=[0, hi], y=[0, hi], mode="lines", name="přesně podle očekávání",
-            line=dict(color=HIGHLIGHT, width=1.2), hoverinfo="skip",
+            x=[0, hi],
+            y=[0, hi],
+            mode="lines",
+            name="přesně podle očekávání",
+            line=dict(color=HIGHLIGHT, width=1.2),
+            hoverinfo="skip",
         )
     )
     if np.isfinite(spread):
@@ -784,8 +799,13 @@ def fact_vs_expectation(
             off = center + k * threshold * spread
             fig.add_trace(
                 go.Scatter(
-                    x=[0, hi], y=[off, hi + off], mode="lines", name=nm or "", showlegend=nm is not None,
-                    line=dict(color=HIGHLIGHT, width=1, dash="dash"), hoverinfo="skip",
+                    x=[0, hi],
+                    y=[off, hi + off],
+                    mode="lines",
+                    name=nm or "",
+                    showlegend=nm is not None,
+                    line=dict(color=HIGHLIGHT, width=1, dash="dash"),
+                    hoverinfo="skip",
                 )
             )
     _add_category_traces(fig, df, x, y, highlight, text_pos="top center")
@@ -819,7 +839,11 @@ def group_points(df: pd.DataFrame, order: list[str], value_label: str, highlight
             type="line", x0=i - 0.32, x1=i + 0.32, y0=med, y1=med, line=dict(color=HIGHLIGHT, width=3)
         )
     x = df["group"].map(pos).to_numpy(dtype=float) + _jitter_for(df["patient_id"], 0.22)
-    kinds = (("normal", "pacient"), ("longer", "neobvykle delší pobyty"), ("shorter", "neobvykle kratší pobyty"))
+    kinds = (
+        ("normal", "pacient"),
+        ("longer", "neobvykle delší pobyty"),
+        ("shorter", "neobvykle kratší pobyty"),
+    )
     for key, name in kinds:
         m = (df["cat"] == key).to_numpy()
         if not m.any():
@@ -861,5 +885,190 @@ def group_points(df: pd.DataFrame, order: list[str], value_label: str, highlight
             automargin=True,
         ),
         yaxis=dict(title=value_label, automargin=True),
+    )
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Shlukování (záložka Shlukování na stránce Analýza odchylek)
+# ---------------------------------------------------------------------------
+
+# Barvy shluků – záměrně bez oranžové a modré (ty nesou směr odchylky).
+CLUSTER_COLORS = ["#0B6E66", "#6B4E9B", "#8C564B", "#C2185B", "#7A8B1E", "#455A64", "#B8860B", "#2E7D32"]
+CONTEXT_GREY = "#D3D9D7"
+LINK_GREY = "#9AA5A2"
+
+
+def cluster_color(cluster_id) -> str:
+    try:
+        return CLUSTER_COLORS[(int(cluster_id) - 1) % len(CLUSTER_COLORS)]
+    except (TypeError, ValueError):
+        return LINK_GREY
+
+
+def cluster_scatter(
+    points: pd.DataFrame,
+    context: pd.DataFrame | None,
+    x_title: str,
+    y_title: str,
+    selected: int | None,
+    one_dim: bool = False,
+) -> go.Figure:
+    """Body v prostoru obarvené podle shluků; šedě ostatní porovnatelní pacienti.
+
+    points: patient_id, x, y, cluster_id, cluster_label, info. context: x, y (může být None).
+    """
+    fig = go.Figure()
+    if context is not None and len(context):
+        fig.add_trace(
+            go.Scatter(
+                x=context["x"],
+                y=context["y"],
+                mode="markers",
+                name="ostatní porovnatelní pacienti",
+                marker=dict(color=CONTEXT_GREY, size=7),
+                hoverinfo="skip",
+            )
+        )
+    for cid, sub in points.groupby("cluster_id", sort=True):
+        is_sel = selected is None or int(cid) == selected
+        color = cluster_color(cid)
+        n = len(sub)
+        fig.add_trace(
+            go.Scatter(
+                x=sub["x"],
+                y=sub["y"],
+                mode="markers+text",
+                text=sub["patient_id"],
+                textposition="top center",
+                textfont=dict(size=10, color=color),
+                name=f"{sub['cluster_label'].iloc[0]} ({n})",
+                opacity=1.0 if is_sel else 0.3,
+                marker=dict(
+                    color=color,
+                    size=15 if (selected is not None and is_sel) else 11,
+                    line=dict(color=HIGHLIGHT if (selected is not None and is_sel) else "white", width=1.5),
+                ),
+                customdata=np.stack([sub["patient_id"], sub["info"], sub["cluster_id"].astype(int)], axis=-1),
+                hovertemplate="<b>%{customdata[0]}</b> · Shluk %{customdata[2]}<br>%{customdata[1]}<extra></extra>",
+            )
+        )
+    fig.update_layout(
+        **{
+            **LAYOUT,
+            "height": 440,
+            "margin": dict(l=10, r=10, t=50, b=10),
+            "legend": dict(orientation="h", y=1.02, yanchor="bottom", x=0, xanchor="left"),
+        },
+        xaxis=dict(title=x_title, zeroline=False, automargin=True),
+        yaxis=dict(title=y_title, zeroline=False, automargin=True, visible=not one_dim),
+        clickmode="event+select",
+    )
+    return fig
+
+
+def dendrogram_figure(
+    segments: list[dict],
+    leaf_order: list[str],
+    leaf_cluster: dict[str, int],
+    cut_height: float | None,
+    selected: int | None,
+    leaf_info: dict[str, str],
+) -> go.Figure:
+    """Dendrogram: U-tvary spojení, větve obarvené shlukem, čárkovaný řez. Klik na list vybere jeho shluk."""
+    fig = go.Figure()
+    for seg in segments:
+        c = seg["cluster"]
+        is_sel = selected is not None and c == selected
+        fig.add_trace(
+            go.Scatter(
+                x=seg["x"],
+                y=seg["y"],
+                mode="lines",
+                showlegend=False,
+                hoverinfo="skip",
+                line=dict(
+                    color=cluster_color(c) if c is not None else LINK_GREY, width=3.2 if is_sel else 1.8
+                ),
+                opacity=1.0 if (selected is None or is_sel or c is None) else 0.35,
+            )
+        )
+    xs = list(range(len(leaf_order)))
+    clusters = [leaf_cluster.get(p) for p in leaf_order]
+    fig.add_trace(
+        go.Scatter(
+            x=xs,
+            y=[0] * len(xs),
+            mode="markers",
+            showlegend=False,
+            marker=dict(
+                color=[cluster_color(c) for c in clusters], size=11, line=dict(color="white", width=1)
+            ),
+            customdata=np.stack(
+                [
+                    leaf_order,
+                    [leaf_info.get(p, "") for p in leaf_order],
+                    [int(c) if c is not None else 0 for c in clusters],
+                ],
+                axis=-1,
+            ),
+            hovertemplate="<b>%{customdata[0]}</b> · Shluk %{customdata[2]}<br>%{customdata[1]}<extra></extra>",
+        )
+    )
+    if cut_height is not None:
+        fig.add_hline(y=cut_height, line=dict(color=HIGHLIGHT, dash="dash", width=1.2))
+        fig.add_annotation(
+            x=1,
+            xref="paper",
+            xanchor="right",
+            y=cut_height,
+            yanchor="bottom",
+            showarrow=False,
+            text="řez → shluky",
+            font=dict(size=11, color="#56635F"),
+        )
+    fig.update_layout(
+        **{**LAYOUT, "height": 440, "margin": dict(l=10, r=10, t=20, b=10)},
+        xaxis=dict(
+            tickmode="array",
+            tickvals=xs,
+            ticktext=leaf_order,
+            tickangle=-60,
+            showgrid=False,
+            zeroline=False,
+            automargin=True,
+            range=[-0.7, len(xs) - 0.3],
+        ),
+        yaxis=dict(title="vzdálenost při spojení", zeroline=False, automargin=True, rangemode="tozero"),
+        clickmode="event+select",
+    )
+    return fig
+
+
+def cluster_profile_heatmap(profile: pd.DataFrame, sizes: dict[int, int], selected: int | None) -> go.Figure:
+    """Shluky × proměnné: o kolik běžných rozptylů je průměr shluku nad/pod průměrem všech shlukovaných."""
+    mat = profile.pivot(index="cluster_id", columns="label", values="std_diff").sort_index()
+    labels_y = [f"{'▶ ' if selected == c else ''}Shluk {c} ({sizes.get(c, 0)})" for c in mat.index]
+    lim = float(np.nanmax(np.abs(mat.to_numpy()))) if mat.size else 1.0
+    lim = max(lim, 0.5)
+    fig = go.Figure(
+        go.Heatmap(
+            z=mat.to_numpy(),
+            x=[wrap_label(c, 18) for c in mat.columns],
+            y=labels_y,
+            zmin=-lim,
+            zmax=lim,
+            zmid=0,
+            colorscale=[[0, "#0B6E66"], [0.5, "#F4F6F5"], [1, "#6B4E9B"]],
+            text=np.vectorize(lambda v: f"{v:+.1f}".replace(".", ","))(mat.to_numpy()),
+            texttemplate="%{text}",
+            colorbar=dict(title="rozdíl"),
+            hovertemplate="%{y} · %{x}: %{z:+.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        **{**LAYOUT, "height": max(220, 46 * len(mat) + 110), "margin": dict(l=10, r=10, t=20, b=10)},
+        yaxis=dict(autorange="reversed", automargin=True),
+        xaxis=dict(automargin=True),
     )
     return fig

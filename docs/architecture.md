@@ -28,8 +28,8 @@ app.py ─┬─ ui/sidebar.py ──┐
 | `OutcomeSpec` | ukazatel, popisek dle pravidla výběru epizod, jednotka, statistika, časová politika, hodnotitelnost |
 | `BaselineConfig` | metoda, pravidlo epizod, ukazatele, hierarchie, hranice reference, verze+hash diagnostické mapy, vyřazení pacienti s důvody → `config_id` (`B-…`) |
 | `BaselineResult` | long tabulka pacient × ukazatel (observed, expected, residual, log_residual, stavy, reference) + metadata běhu |
-| `AnalysisConfig` | ukazatele, škála, práh, margin, zahrnutí omezené reference, lokální reference IDs, prahy citlivosti, parametry shlukování → `analysis_id(fp, baseline_id)` (`A-…`) |
-| `AnalysisResult` | `scores` (1 řádek/pacient), `dims` (pacient × ukazatel), `calibration`, `clusters`, `group_summary`, `group_cards`, reference |
+| `AnalysisConfig` | ukazatele, škála, práh, margin, zahrnutí omezené reference, lokální reference IDs, prahy citlivosti, shlukování (`cluster_method`, `cluster_linkage`, `cluster_k` / automaticky, `cluster_features`, `cluster_include_near`, `cluster_min_outliers`) → `analysis_id(fp, baseline_id)` (`A-…`, zahrnuje `CLUSTERING_VERSION`, nemění `baseline_config_id`) |
+| `AnalysisResult` | `scores` (1 řádek/pacient), `dims` (pacient × ukazatel), `calibration`, `clusters`, `cluster_info`, `group_summary`, `group_cards`, reference; pro vizualizace `cluster_matrix` (standardizované), `cluster_raw` (původní jednotky), `cluster_linkage`, `cluster_features` |
 | `ReviewRecord` | record_id, fingerprint, source_mode, patient_id, baseline_config_id, analysis_id, label, status, comment, reviewer, created_at, supersedes |
 
 Identita: `config_id`/`analysis_id` = SHA-256 kanonického JSON konfigurace + `FEATURE_SCHEMA_VERSION` +

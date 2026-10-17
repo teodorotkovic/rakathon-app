@@ -20,6 +20,8 @@ from rakathon import __version__
 # příslušnou verzi, aby staré výsledky a anotace nepředstíraly totožnou analýzu.
 FEATURE_SCHEMA_VERSION = "features-v1"
 METHOD_VERSION = "method-v1"
+# Verze shlukování jen pro analysis_id (nemění baseline_config_id, takže posouzení zůstávají platná).
+CLUSTERING_VERSION = "clustering-v2"
 APP_VERSION = __version__
 
 
@@ -308,13 +310,19 @@ class AnalysisConfig:
     min_calibration_n: int = 8
     min_support_stays: int = 2
     cluster_min_outliers: int = 4
-    cluster_distance_threshold: float = 2.5
+    # Shlukování neobvyklých pacientů (záložka Shlukování) – jeden zdroj pro štítky, souhrn i export.
+    cluster_method: str = "hierarchical"  # "hierarchical" | "kmeans"
+    cluster_linkage: str = "ward"  # jen hierarchické: "ward" | "average" | "complete"
+    cluster_k: int | None = None  # None = automaticky podle siluety
+    cluster_features: tuple[str, ...] | None = None  # None = míra odchylky všech zvolených ukazatelů
+    cluster_include_near: bool = False  # přidat pacienty těsně pod hranicí
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["metrics"] = list(self.metrics)
         d["reference_ids"] = None if self.reference_ids is None else sorted(self.reference_ids)
         d["sensitivity_thresholds"] = list(self.sensitivity_thresholds)
+        d["cluster_features"] = None if self.cluster_features is None else list(self.cluster_features)
         return d
 
     @classmethod
@@ -335,7 +343,11 @@ class AnalysisConfig:
             min_calibration_n=int(d.get("min_calibration_n", 8)),
             min_support_stays=int(d.get("min_support_stays", 2)),
             cluster_min_outliers=int(d.get("cluster_min_outliers", 4)),
-            cluster_distance_threshold=float(d.get("cluster_distance_threshold", 2.5)),
+            cluster_method=d.get("cluster_method", "hierarchical"),
+            cluster_linkage=d.get("cluster_linkage", "ward"),
+            cluster_k=None if d.get("cluster_k") is None else int(d["cluster_k"]),
+            cluster_features=None if d.get("cluster_features") is None else tuple(d["cluster_features"]),
+            cluster_include_near=bool(d.get("cluster_include_near", False)),
         )
 
     def analysis_id(self, dataset_fingerprint: str, baseline_config_id: str) -> str:
@@ -344,6 +356,7 @@ class AnalysisConfig:
             "baseline": baseline_config_id,
             "analysis": self.to_dict(),
             "method_version": METHOD_VERSION,
+            "clustering_version": CLUSTERING_VERSION,
         }
         return "A-" + stable_hash(payload)
 
@@ -374,6 +387,17 @@ class AnalysisResult:
     group_cards: list[dict[str, Any]]
     reference_ids: tuple[str, ...]
     meta: dict[str, Any] = field(default_factory=dict)
+    # Podklady shlukování pro vizualizace (prázdné, pokud se neshlukovalo).
+    cluster_matrix: pd.DataFrame = field(
+        default_factory=pd.DataFrame
+    )  # standardizované hodnoty (pacient × proměnná)
+    cluster_raw: pd.DataFrame = field(
+        default_factory=pd.DataFrame
+    )  # původní jednotky, i pro porovnatelné pacienty
+    cluster_linkage: Any = None  # scipy linkage matice (jen hierarchické)
+    cluster_features: list[dict[str, Any]] = field(
+        default_factory=list
+    )  # klíč, popisek, jednotka, střed, měřítko
 
 
 # ---------------------------------------------------------------------------

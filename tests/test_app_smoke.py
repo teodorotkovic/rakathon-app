@@ -172,6 +172,42 @@ def test_import_dialog_opens(app):
     assert any(b.label == "Načíst lokální data" for b in at.button)
 
 
+def test_clustering_tab(app):
+    at = app
+    at.switch_page("views/deviations.py").run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("Proč shluky vznikly takto" in m.value for m in at.markdown)
+    assert any("Dendrogram" in m.value for m in at.markdown)  # výchozí hierarchické shlukování
+
+    next(r for r in at.radio if r.label == "Algoritmus").set_value("kmeans").run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.session_state["analysis_config"].cluster_method == "kmeans"
+    assert not any(m.value == "#### Dendrogram" for m in at.markdown)
+
+    at.multiselect(key="dv_cl_features").set_value(["z:median_los_dx", "other_stays", "age"]).run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.session_state["analysis_config"].cluster_features == ("z:median_los_dx", "other_stays", "age")
+    assert any("promítnuté do roviny (PCA)" in c.value for c in at.caption)
+
+    at.toggle(key="dv_cl_auto").set_value(False).run()
+    at.slider(key="dv_cl_k").set_value(3).run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.session_state["analysis_config"].cluster_k == 3
+    at.segmented_control(key="dv_cl_pick").set_value(2).run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any(m.value.startswith("#### Shluk 2:") for m in at.markdown)
+    assert any("Čím je shluk definován" in m.value for m in at.markdown)
+
+
+def test_similar_patients_mark_counted(app):
+    at = app
+    _open_first_patient(at)
+    tables = [d.value for d in at.dataframe if "Ve srovnání" in getattr(d.value, "columns", [])]
+    assert tables, "tabulka podobných pacientů má sloupec Ve srovnání"
+    assert set(tables[0]["Ve srovnání"]) <= {"ano", "ne"}
+    assert any("Šedé řádky se do očekávání nezapočítávají" in c.value for c in at.caption)
+
+
 def test_reset_view_restores_defaults(app):
     at = app
     at.switch_page("views/deviations.py").run()

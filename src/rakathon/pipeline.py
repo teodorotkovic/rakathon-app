@@ -14,6 +14,7 @@ from importlib import metadata
 import pandas as pd
 
 from rakathon.analysis.clustering import cluster_outliers
+from rakathon.analysis.clustering import feature_options as cluster_feature_options
 from rakathon.analysis.detectors import run_robust_detector
 from rakathon.analysis.explanations import describe_groups
 from rakathon.analysis.residuals import attach_residuals
@@ -155,7 +156,10 @@ def compute_analysis(g: GlobalResults, config: AnalysisConfig) -> AnalysisResult
         raise ValueError(f"Ukazatele {unknown} nejsou součástí aktivní globální baseline.")
     det = run_robust_detector(g.results_long, config)
     scores, dims = det["scores"], det["dims"]
-    clusters, info = cluster_outliers(scores, dims, config)
+    cat_cols, num_cols = descriptor_columns(g.extra_meta)
+    options = cluster_feature_options(config.metrics, num_cols, g.patient_table, g.label)
+    co = cluster_outliers(scores, dims, g.patient_table, config, lambda k: options.get(k, k))
+    clusters, info = co.assignments, co.info
     scores = scores.merge(
         clusters[["patient_id", "cluster_id", "cluster_label"]],
         on="patient_id",
@@ -163,7 +167,6 @@ def compute_analysis(g: GlobalResults, config: AnalysisConfig) -> AnalysisResult
         validate="one_to_one",
     )
     scores["cluster_label"] = scores["cluster_label"].fillna("")
-    cat_cols, num_cols = descriptor_columns(g.extra_meta)
     group_summary, cards = describe_groups(
         clusters,
         scores,
@@ -192,4 +195,8 @@ def compute_analysis(g: GlobalResults, config: AnalysisConfig) -> AnalysisResult
         group_cards=cards,
         reference_ids=det["reference_ids"],
         meta={"method_version": METHOD_VERSION, "environment": run_environment()},
+        cluster_matrix=co.matrix,
+        cluster_raw=co.raw,
+        cluster_linkage=co.linkage,
+        cluster_features=co.features,
     )

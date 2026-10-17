@@ -773,6 +773,12 @@ def _tab_labs(pid: str) -> None:
         )
 
 
+def similar_counted_flags(ids: list[str], reference_ids: str) -> list[bool]:
+    """Které z podobných pacientů se skutečně započítávají do očekávání (patří do srovnávací skupiny)."""
+    counted = {p for p in str(reference_ids or "").split(";") if p}
+    return [p in counted for p in ids]
+
+
 def _tab_similar(pid: str, g: GlobalResults, a: AnalysisResult) -> None:
     sim = similar_patients(pid, g.core, k=10)
     if sim.empty:
@@ -780,6 +786,7 @@ def _tab_similar(pid: str, g: GlobalResults, a: AnalysisResult) -> None:
         return
     main = a.config.metrics[0]
     r = g.results_long[g.results_long["metric_id"] == main].set_index("patient_id")
+    counted = similar_counted_flags(sim["patient_id"].tolist(), r.at[pid, "reference_ids"])
     s = a.scores.set_index("patient_id")
     sim["Pozorováno"] = sim["patient_id"].map(r["observed"])
     sim["Očekávání"] = sim["patient_id"].map(r["expected"])
@@ -793,22 +800,31 @@ def _tab_similar(pid: str, g: GlobalResults, a: AnalysisResult) -> None:
             "sex": "Pohlaví",
         }
     ).drop(columns="similarity")
+    view.insert(1, "Ve srovnání", ["ano" if c else "ne" for c in counted])
+    model = g.baseline.config.method == "ridge_loo"
     st.caption(
-        "Podobnost podle výchozích charakteristik (diagnóza/skupina, věk, pohlaví) – posuzovaný výsledek "
-        "není kritériem. Klikněte na řádek pro detail pacienta."
+        "Seznam nejpodobnějších pacientů podle diagnózy/skupiny, věku a pohlaví je jen pro orientaci – posuzovaný "
+        "výsledek není kritériem. **Šedé řádky se do očekávání nezapočítávají:** "
+        + (
+            "patří do jiné skupiny diagnóz, než se kterou model pacienta srovnává."
+            if model
+            else "liší se v údaji, podle kterého se srovnává (např. věková skupina nebo přesná diagnóza), nebo "
+            "nemají započitatelný pobyt."
+        )
+        + " Klikněte na řádek pro detail pacienta."
     )
+    for col, digits in (("Pozorováno", 1), ("Očekávání", 1), ("Míra odchylky", 2)):
+        # stylovaná tabulka nezobrazí chybějící hodnotu hezky – převod na text s „–“
+        view[col] = [f"{v:.{digits}f}" if pd.notna(v) else "–" for v in view[col]]
+    grey = ["color: #9AA0A6"] * len(view.columns)
+    styled = view.style.apply(lambda row: grey if row["Ve srovnání"] == "ne" else [""] * len(row), axis=1)
     ev = st.dataframe(
-        view,
+        styled,
         hide_index=True,
         width="stretch",
         on_select="rerun",
         selection_mode="single-cell",
         key=f"similar_{pid}_{state.nonce()}",
-        column_config={
-            "Pozorováno": st.column_config.NumberColumn(format="%.1f"),
-            "Očekávání": st.column_config.NumberColumn(format="%.1f"),
-            "Míra odchylky": st.column_config.NumberColumn(format="%.2f"),
-        },
     )
     other = patient_from_cell_selection(ev.selection.cells if ev is not None else [], view)
     if other:

@@ -16,8 +16,9 @@ okomentovat a exportovat.
   posouzení lékařem (formulář v okně) a podrobnosti výpočtu na vyžádání; záložky Epizody péče, Laboratoř,
   Podobní pacienti, Nádor a data. Vysvětlivky přehledu jsou dole.
 - **Analýza odchylek** – volba ukazatelů/škály/prahu, oddělené role „zobrazit vybrané“ × „použít jako referenci“,
-  rozložení odchylek s výběrem bodů, seřazené neobvyklé případy, **skupiny uvnitř outlierů** s popisem vůči
-  referenci, kontext charakteristik, uložení/načtení pohledu a export.
+  rozložení odchylek s výběrem bodů, seřazené neobvyklé případy, záložka **Shlukování** (shluky jen uvnitř
+  neobvyklých pacientů: hierarchické nebo k-means, volba proměnných, dendrogram, body v prostoru, interpretace
+  vybraného shluku), kontext charakteristik, grafy, uložení/načtení pohledu a export.
 
 **Postranní panel** je záměrně jednoduchý: přepínání stránek, počty pacientů/epizod/laboratoří a tlačítka, která
 otevírají velká okna – *Data a import*, *Jak počítáme očekávání* (srozumitelná volba metody a pobytů, každá volba
@@ -54,7 +55,7 @@ Po instalaci závislostí nepotřebuje síť.
 
 ## Testy a kontroly
 ```powershell
-python -m uv run pytest                                  # 42 testů vč. AppTest průchodů UI
+python -m uv run pytest                                  # 53 testů vč. AppTest průchodů UI
 python -m uv run ruff check . ; python -m uv run ruff format --check .
 python -m uv run python scripts/check_real_data.py       # strukturální kontrola na skutečných datech (bez výpisu pacientů)
 python -m uv run python scripts/profile_data.py          # profil dat do runtime/profile/

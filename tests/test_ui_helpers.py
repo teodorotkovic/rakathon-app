@@ -6,7 +6,7 @@ import pytest
 
 from rakathon.analysis.explanations import explain_flag
 from rakathon.domain import AnalysisConfig
-from rakathon.ui.patients import patient_from_cell_selection, reliability_text
+from rakathon.ui.patients import patient_from_cell_selection, reliability_text, similar_counted_flags
 from rakathon.ui.texts import plain_context
 
 
@@ -16,6 +16,12 @@ def test_click_on_any_cell_opens_patient_of_that_row():
     assert patient_from_cell_selection([[2, "ID"]], table) == "P0002"
     assert patient_from_cell_selection([], table) is None
     assert patient_from_cell_selection([(7, "ID")], table) is None
+
+
+def test_similar_patients_counted_only_if_in_reference():
+    assert similar_counted_flags(["P1", "P2", "P3"], "P1;P3") == [True, False, True]
+    assert similar_counted_flags(["P1"], "") == [False]
+    assert similar_counted_flags(["P1"], None) == [False]
 
 
 def test_reliability_text():

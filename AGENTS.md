@@ -107,6 +107,10 @@ prohlédni stav (`git status`, `docs/STATUS.md`) → vyber malý úkol z `docs/T
   bez self-inclusion, OOF/LOO), registruj v `get_baseline_model`, přidej do `validate_baseline_config`.
 - **Detektor:** funkce se stejným výstupem jako `run_robust_detector` (scores/dims/calibration/reference_ids),
   nová hodnota `AnalysisConfig.method`, větvení v `pipeline.compute_analysis`.
+- **Algoritmus shlukování:** větev v `analysis/clustering.py::_fit` (vrací štítky 0…k−1 pro matici pacientů),
+  nová hodnota `AnalysisConfig.cluster_method` + validace v `configuration.validate_analysis_config`, popis
+  v `ui/deviations.py::CL_METHODS/ALGO_HELP`. Shlukují se jen outlieři; nová proměnná = klíč ve
+  `feature_options`/`feature_values`. Změna semantiky ⇒ zvýšit `CLUSTERING_VERSION` (ne `METHOD_VERSION`).
 
 ## 11. Handoff musí obsahovat
 změněné soubory, důvod, spuštěné příkazy a jejich výsledek, otevřené problémy, navazující úkol (do `docs/TASKS.md`).

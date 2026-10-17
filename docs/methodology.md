@@ -66,13 +66,28 @@ hraniční; těsně pod prahem ≥ práh − margin/2; bez výrazné), **opora**
 
 Na skutečných datech (výchozí: 1 ukazatel, log, práh 2.5): 107 skórováno, 3 nad prahem.
 
-## 5. Shlukování outlierů a popis skupin
-Jen množina outlierů. Při < `cluster_min_outliers` (4) se skupiny nevytváří („příliš málo případů“).
-Jinak `AgglomerativeClustering(linkage="average", distance_threshold=2.5)` nad podepsanými z-profily;
-skupiny ≥ 2 pacienti, singletony = izolované případy. U jedné dimenze aplikace uvádí, že skupiny vyjadřují hlavně
-směr a velikost odchylky.
+## 5. Shlukování outlierů a popis shluků
+Interaktivně v záložce **Shlukování** (stránka Analýza odchylek); nastavení je součástí `AnalysisConfig`, takže
+štítky u pacientů, souhrn, popis shluků i export vycházejí z téhož výsledku (`analysis/clustering.py`).
 
-Popis skupiny: profil reziduí (medián pozorováno vs. očekávání, medián z, počet delší/kratší), složení diagnóz,
+- **Koho:** jen neobvyklí pacienti (`outlier`), volitelně i těsně pod hranicí (`cluster_include_near`). Při
+  < `cluster_min_outliers` (4) se shluky nevytváří („příliš málo případů“). Celá kohorta se neshlukuje.
+- **Proměnné** (`cluster_features`, výchozí = míra odchylky se znaménkem všech zvolených ukazatelů): míra
+  odchylky (`z:`), rozdíl ve dnech (`res:`), hospitalizace s jinou hlavní diagnózou, věková skupina (pořadí)
+  a numerické popisné vlastnosti pacienta (`pt:`, vč. doplňkových). Každá proměnná se převede na „kolik běžných
+  rozptylů od mediánu porovnatelných pacientů“ (medián, 1,4826·MAD → IQR; míra odchylky už v této škále je);
+  proměnná bez rozptylu se vynechá; pacient s chybějící hodnotou se vyřadí a vypíše (nic se nedoplňuje).
+- **Algoritmy:** hierarchické shlukování (`scipy` linkage Ward / průměrná / nejvzdálenější vzdálenost, řez
+  `fcluster(maxclust=k)`; deterministické, s dendrogramem) a k-means (`n_init=10`, `random_state=0`).
+- **Počet shluků:** automaticky = nejlepší silueta pro k = 2…min(6, n−1) (při shodě menší k), nebo ručně
+  2…min(8, n−1). Silueta je uvedena slovy (≥ 0,5 jasně, 0,25–0,5 částečně, < 0,25 slabě oddělené – vzorec může
+  být náhodný). Shluk o 1 pacientovi = jednotlivý případ (bez štítku a popisu).
+- **Vizualizace:** body v prostoru (1 proměnná = pás, 2 = přímo osy, ≥ 3 = PCA jen pro orientaci, shluky se
+  počítají z plných dat), dendrogram s řezem (jen hierarchické), profil shluků (rozdíl průměru shluku od všech
+  shlukovaných ve standardizovaných jednotkách). „Čím je shluk definován“ = proměnné s největším |rozdílem|.
+- U jedné proměnné aplikace uvádí, že shluky vyjadřují hlavně její výši (u míry odchylky směr a velikost).
+
+Popis shluku (`explanations.describe_groups`): profil reziduí (medián pozorováno vs. očekávání, medián z, počet delší/kratší), složení diagnóz,
 věku a pohlaví; srovnání s (a) lokální referencí bez členů skupiny a (b) referencí se stejnými diagnózami:
 kategorické = podíl ve skupině vs. referenci a rozdíl v p. b. (zobrazeny jen rozdíly ≥ 20 p. b. s ≥ 2 pacienty),
 numerické = medián/IQR a dostupné `n`, laboratoře = medián pacientských mediánů stejného testu a jednotky.

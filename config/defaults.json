@@ -31,6 +31,10 @@
     "min_calibration_n": 8,
     "min_support_stays": 2,
     "cluster_min_outliers": 4,
-    "cluster_distance_threshold": 2.5
+    "cluster_method": "hierarchical",
+    "cluster_linkage": "ward",
+    "cluster_k": null,
+    "cluster_features": null,
+    "cluster_include_near": false
   }
 }

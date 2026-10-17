@@ -330,7 +330,7 @@ def _compare_categorical(members, ref, t, col, label, group_name, comp_name) -> 
                 "n_group_available": len(g_av),
                 "n_reference_available": len(r_av),
                 "text": (
-                    f"{label} = {value}: {cnt}/{len(g_av)} ve skupině ({fmt_pct(share_g)}) vs. "
+                    f"{label} = {value}: {cnt}/{len(g_av)} ve shluku ({fmt_pct(share_g)}) vs. "
                     f"{fmt_pct(share_r)} v referenci (n={len(r_av)}); rozdíl {fmt_pp(diff)}"
                 ),
                 "_count": int(cnt),
@@ -351,7 +351,7 @@ def _compare_categorical(members, ref, t, col, label, group_name, comp_name) -> 
                 "difference": np.nan,
                 "n_group_available": len(g_av),
                 "n_reference_available": len(r_av),
-                "text": f"{label}: údaj chybí u {missing_g}/{len(members)} pacientů skupiny",
+                "text": f"{label}: údaj chybí u {missing_g}/{len(members)} pacientů shluku",
                 "_count": 0,
             }
         )
@@ -492,7 +492,7 @@ def describe_groups(
     grouped = clusters[~clusters["isolated"].astype(bool)]
     for cid, sub in grouped.groupby("cluster_id"):
         members = sorted(sub["patient_id"])
-        name = f"Skupina {int(cid)}"
+        name = f"Shluk {int(cid)}"
         ref = [p for p in reference_ids if p not in members]
         dx_set = set(t.loc[members, "dx_icd10"])
         dx_ref = [p for p in ref if t.at[p, "dx_icd10"] in dx_set]
@@ -529,7 +529,7 @@ def describe_groups(
         ref_dx_share = float(t.loc[ref, "dx_icd10"].isin(dx_set).mean()) if ref else 0.0
         if ref_dx_share < 0.3:
             warnings.append(
-                f"Diagnózy skupiny ({', '.join(sorted(dx_set))}) tvoří jen {fmt_pct(ref_dx_share)} lokální reference – "
+                f"Diagnózy shluku ({', '.join(sorted(dx_set))}) tvoří jen {fmt_pct(ref_dx_share)} lokální reference – "
                 "nalezený vzorec může odrážet odlišnou skladbu diagnóz."
             )
         if len(dx_ref) < 3:
@@ -537,7 +537,7 @@ def describe_groups(
                 f"Reference se stejnými diagnózami má jen {len(dx_ref)} pacientů – srovnání je nestabilní."
             )
         if len(members) < 5:
-            warnings.append("Malá skupina – popis je hypotéza pro mentora, ne statistický závěr.")
+            warnings.append("Malý shluk – popis je hypotéza pro mentora, ne statistický závěr.")
 
         cards.append(
             {
