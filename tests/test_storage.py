@@ -5,10 +5,10 @@ import zipfile
 
 import pandas as pd
 import pytest
+from synthetic_data import generate_synthetic
 
 from rakathon.configuration import load_diagnosis_map, load_settings
 from rakathon.data.dataset import prepare_dataset
-from synthetic_data import generate_synthetic
 from rakathon.domain import AnalysisConfig, BaselineConfig, ReviewStatus, SourceMode
 from rakathon.pipeline import compute_analysis, compute_global
 from rakathon.storage import exports

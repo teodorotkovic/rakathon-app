@@ -16,7 +16,7 @@ pobyty z různých fází péče; nejde o kompletní zátěž onkologické léč
 Pravidla: žádný vybraný pobyt ⇒ výsledek chybí (`no_relevant_stay`), nikdy 0; jediný pobyt ⇒ hodnota se ukáže,
 ale opora je označena jako omezená; pacient s více nádory ⇒ vyřazen (`excluded`).
 
-**Alternativní pravidla výběru pobytů** (globální, „Globální očekávání (pokročilé)“):
+**Alternativní pravidla výběru pobytů** (globální, postranní panel → „Jak počítáme očekávání“):
 - `group_dx_match` – hlavní dg. pobytu ve stejné orientační skupině jako nádor (např. D43 a C71),
 - `from_anchor_all_inpatient` – všechny dokončené hospitalizace od kotvy = první epizoda (podle pořadí) s dg.
   nádoru. Kotva je proxy, ne datum diagnózy; bez kotvy se pacient nehodnotí (`no_anchor`).
@@ -92,7 +92,7 @@ ale ovlivňuje mezery mezi epizodami – proto readmise nejsou ukazatelem); labo
 úplnost sledování neznámá; kratší pobyt ≠ lepší průběh; žádná kauzální interpretace.
 
 ## 8. Volitelná druhá baseline: Ridge s leave-one-patient-out (implementováno)
-Volba „Metoda očekávání“ v *Globální očekávání (pokročilé)* (`BaselineConfig.method = "ridge_loo"`,
+Volba „Statistický model“ v okně *Jak počítáme očekávání* (`BaselineConfig.method = "ridge_loo"`,
 `ridge_alpha = 1.0`). Model: `Ridge` nad `y = log1p(ukazatel)` se vstupy diagnostická kategorie (orientační
 skupina; u nezařazených diagnóz přesný kód), věková skupina, pohlaví – one-hot encoding s `handle_unknown="ignore"`.
 
@@ -104,7 +104,7 @@ skupina; u nezařazených diagnóz přesný kód), věková skupina, pohlaví �
   tabulka (log1p příspěvek a násobek `1 + délka`), test `test_ridge_decomposition_matches_prediction`.
 - Opora: počet jiných pacientů ve stejné diagnostické kategorii; ≥ 8 ok, 4–7 omezená, < 4 očekávání se nevydá
   (model by vycházel jen z věku a pohlaví). Nevídaná hodnota faktoru má nulový příspěvek a je uvedena.
-- Popisné LOO chyby (obě metody) jsou v postranním panelu: na skutečných datech medián |rozdílu| hlavního
+- Popisné LOO chyby aktivní metody jsou v okně *Jak počítáme očekávání → Pokročilé*: na skutečných datech medián |rozdílu| hlavního
   ukazatele 1,25 dne (peer medián) vs. 1,13 dne (Ridge), 107/157 hodnoceno. Nejde o klinickou validaci.
 
 Neimplementováno: Isolation Forest nad rezidui, bootstrap stability, PCA – viz `docs/TASKS.md`.

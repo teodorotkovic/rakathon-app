@@ -16,7 +16,8 @@ python -m uv run streamlit run app.py --server.address 127.0.0.1
 3. **Skupina (60 s).** „Prozkoumat v analýze odchylek“ → pacient zvýrazněn. Záložka *Skupinové vzorce*: skupina
    s delšími pobyty a více D70 epizodami vs. referencí, varování o skladbě diagnóz.
 4. **Feedback (45 s).** V panelu posouzení zvolit „Klinicky zajímavé“, komentář, uložit → stav se změní a zůstane
-   po obnovení stránky. Ukázat „Navrhnout vyřazení z výpočtu“ (projeví se až po potvrzení přepočtu).
+   po obnovení stránky. Ukázat „Navrhnout vyřazení z výpočtu“ (projeví se až po potvrzení přepočtu v okně
+   *Jak počítáme očekávání* v postranním panelu – tam ukázat i volbu metody s nápovědou „?“).
 5. **Změna pohledu (30 s).** Přidat ukazatel „Nejdelší pobyt“ → 2D graf + heatmapa; posunout práh; „Použít jako
    referenci“ na filtrovanou skupinu (např. jen leukémie) – globální očekávání se nemění.
 6. **Export (15 s).** „Exportovat zobrazený pohled – ZIP“ a otevřít `analysis_results.csv` (posouzení, analýza,
@@ -27,7 +28,9 @@ python -m uv run streamlit run app.py --server.address 127.0.0.1
 - [ ] „Zobrazit vybrané“ nastaví vyšetřovaný výběr a zvýrazní body; „Zrušit výběr“ ho vymaže.
 - [ ] „Použít jako referenci“ změní řádek „Lokální reference“ a standardizaci, ne očekávání v detailu.
 - [ ] Klik na řádek v tabulce Pacienti otevře detail téhož ID; „← Zpět na seznam“ vrátí přehled.
-- [ ] Přepočet globálního očekávání (jiné pravidlo pobytů) změní ID konfigurace; dřívější posouzení se ukáže
-      v historii „jiný kontext“.
+- [ ] *Jak počítáme očekávání*: zaškrtnutí jiné volby odškrtne předchozí, „?“ ukáže vysvětlení, „Přepočítat
+      očekávání“ okno zavře a změní ID konfigurace v liště stránky; dřívější posouzení se ukáže v historii
+      „jiný kontext“. Křížek okno zavře bez změny.
+- [ ] Postranní panel neukazuje otisk datasetu ani technické údaje; ikony stránek jsou dobře čitelné.
 - [ ] Import `extra_features.csv` → vlastnost v detailu („Nádor a data“), filtru a popisu skupin.
 - [ ] Nahrání neplatných CSV ponechá původní dataset a zobrazí zprávu o validaci.

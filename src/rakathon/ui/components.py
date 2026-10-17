@@ -153,11 +153,12 @@ def exclusion_button(pid: str, key_prefix: str) -> None:
     pending = st.session_state.get(state.K_PENDING_EXCL, {})
     excluded_now = pid in state.baseline_config().excluded_patient_ids
     if excluded_now:
-        st.info("Pacient je vyřazen z aktuální verze výpočtu (viz postranní panel → Globální očekávání).")
+        st.info("Pacient je vyřazen z aktuální verze výpočtu (postranní panel → Jak počítáme očekávání).")
         return
     if pid in pending:
         st.caption(
-            "Vyřazení je navrženo – projeví se po potvrzení **Přepočítat očekávání** v postranním panelu."
+            "Vyřazení je navrženo – projeví se po potvrzení **Přepočítat očekávání** "
+            "(postranní panel → Jak počítáme očekávání)."
         )
         return
     with st.popover("Navrhnout vyřazení z výpočtu", icon=":material/block:"):
@@ -173,7 +174,9 @@ def exclusion_button(pid: str, key_prefix: str) -> None:
             pending[pid] = reason.strip() or "podezření na datový problém"
             st.session_state[state.K_PENDING_EXCL] = pending
             state.flash(
-                "info", f"Vyřazení {pid} navrženo; potvrďte v postranním panelu „Přepočítat očekávání“."
+                "info",
+                f"Vyřazení {pid} navrženo; potvrďte v postranním panelu: Jak počítáme očekávání → "
+                "Přepočítat očekávání.",
             )
             st.rerun()
 

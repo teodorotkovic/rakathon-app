@@ -68,7 +68,10 @@ Proměnné: `RAKATHON_DATA_DIR` (výchozí `data`), `RAKATHON_RUNTIME_DIR` (výc
 
 ## 6. Analytické invarianty
 - Očekávání pacienta nesmí záviset na jeho vlastním výsledku (LOO; test `test_own_outcome_does_not_change_own_expectation`).
-- Globální baseline mění jen vědomé potvrzení („Přepočítat očekávání“) → nové `baseline_config_id`.
+- Globální baseline mění jen vědomé potvrzení („Přepočítat očekávání“ v okně *Jak počítáme očekávání*)
+  → nové `baseline_config_id`.
+- Postranní panel drž jednoduchý pro lékaře: žádné otisky, kódy validace ani cesty; obsah patří do dialogů
+  (`ui/sidebar.py`), technické údaje do exportu a dokumentace.
   Filtr, výběr bodu ani lokální reference ji nemění.
 - Směr odchylky = znaménko původního rezidua vůči baseline, ne lokálně centrovaného z.
 - Shlukuje se **jen množina outlierů**; při < `cluster_min_outliers` se skupiny nevynucují.

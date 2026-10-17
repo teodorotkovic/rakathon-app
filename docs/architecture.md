@@ -39,12 +39,19 @@ Metadata běhu nesou verze Pythonu a knihoven (`pipeline.run_environment`).
 ## Globální vs. lokální stav (tři množiny pacientů)
 | Množina | Kde žije | Jak se mění | Co ovlivní |
 |---|---|---|---|
-| Globální baseline | `st.session_state["baseline_config"]` | jen formulář **Přepočítat očekávání** / načtení pohledu | očekávání, rezidua, `baseline_config_id`, platnost posouzení |
+| Globální baseline | `st.session_state["baseline_config"]` | jen tlačítko **Přepočítat očekávání** v okně *Jak počítáme očekávání* / načtení pohledu | očekávání, rezidua, `baseline_config_id`, platnost posouzení |
 | Lokální reference detektoru | `AnalysisConfig.reference_ids` | **Použít jako referenci** / **Výchozí reference** | jen kalibraci lokálního skóre (`analysis_id`) |
 | Vyšetřovaný výběr | `st.session_state["investigated_ids"]` | **Zobrazit vybrané**, výběr v grafu/seznamu, skupina | jen zvýraznění, vysvětlení, kontext |
 
 Stránka Pacienti vždy používá výchozí `AnalysisConfig` z `config/defaults.json`; experimenty v Analýze odchylek
 ji nemění. Detail otevřený z analýzy navíc ukáže lokální skóre s názvem pohledu.
+
+## Postranní panel a dialogy
+`ui/sidebar.py` ukazuje jen počty a tlačítka; obsah je v `st.dialog(width="large")`. Otevřený dialog je ve
+`st.session_state["open_dialog"]` (`state.open_dialog/close_dialog`, `on_dismiss` ho maže), volá se jednou za běh
+mimo `with st.sidebar`. Volby v okně *Jak počítáme očekávání* jsou v klíčích `gs_*`, které se plní z aktivní
+`BaselineConfig` při otevření; teprve **Přepočítat očekávání** vytvoří novou konfiguraci. `_import_content()` se
+používá i na obrazovce „Chybí data“.
 
 ## Tok změn a cache
 1. Načtení datasetu: bytes → `fingerprint_files` → `prepare_dataset` (cache podle otisku). Neplatný import se

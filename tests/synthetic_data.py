@@ -97,10 +97,18 @@ def generate_synthetic(seed: int = DEFAULT_SEED) -> SyntheticDataset:
 
     # Pacient se dvěma nádory: zobrazí se, ale vyřadí z baseline.
     pid = f"P{5001 + len(plan):04d}"
-    p_multi = {"dx": "C91", "base": 5.0, "topo": "C42.1", "morph": "9836/3", "pattern": "multi_tumor", "pid": pid}
+    p_multi = {
+        "dx": "C91",
+        "base": 5.0,
+        "topo": "C42.1",
+        "morph": "9836/3",
+        "pattern": "multi_tumor",
+        "pid": pid,
+    }
     patient_rows.append(_patient_row(pid, 1, "F", "6-8", p_multi, rng))
-    patient_rows.append(_patient_row(pid, 2, "F", "12-14",
-                                     {"dx": "C49", "topo": "C49.2", "morph": "8910/3"}, rng))
+    patient_rows.append(
+        _patient_row(pid, 2, "F", "12-14", {"dx": "C49", "topo": "C49.2", "morph": "8910/3"}, rng)
+    )
     truth_rows.append({"patient_id": pid, "planted_pattern": "multi_tumor"})
     episode_rows.extend(_episodes_for(pid, p_multi, "6-8", rng))
 
@@ -113,8 +121,16 @@ def generate_synthetic(seed: int = DEFAULT_SEED) -> SyntheticDataset:
     lab_pids = [p["pid"] for p in plan if rng.random() < 0.45 or p["pattern"] == "long_stays_d70"]
     for k, lpid in enumerate(lab_pids):
         heavy = k == 0
-        lab_rows.extend(_labs_for(lpid, episodes[episodes["patient_id"] == lpid], pattern_by_pid[lpid],
-                                  heavy, negative=k in (1, 2), rng=rng))
+        lab_rows.extend(
+            _labs_for(
+                lpid,
+                episodes[episodes["patient_id"] == lpid],
+                pattern_by_pid[lpid],
+                heavy,
+                negative=k in (1, 2),
+                rng=rng,
+            )
+        )
 
     patients = pd.DataFrame(patient_rows, columns=PATIENT_COLUMNS)
     labs = pd.DataFrame(lab_rows, columns=LAB_COLUMNS)
@@ -129,15 +145,26 @@ def generate_synthetic(seed: int = DEFAULT_SEED) -> SyntheticDataset:
 def _patient_row(pid: str, tumor_id: int, sex: str, age: str, p: dict, rng: np.random.Generator) -> dict:
     staged = rng.random() < 0.18
     return {
-        "patient_id": pid, "tumor_id": str(tumor_id), "sex": sex, "age_group": age, "dx_icd10": p["dx"],
+        "patient_id": pid,
+        "tumor_id": str(tumor_id),
+        "sex": sex,
+        "age_group": age,
+        "dx_icd10": p["dx"],
         "topography_icdo3": p["topo"],
         "morphology_icdo3": "3333/3" if rng.random() < 0.04 else p["morph"],
         "laterality": str(rng.choice(["4", "4", "4", "1", "2"])),
         "grade": str(rng.choice(["9", "9", "9", "5", "6", "1", "3", ""])),
-        "stage": str(rng.choice(["1A", "2", "2A", "3", "4"])) if staged else str(rng.choice(["7", "7", "7", "9"])),
+        "stage": str(rng.choice(["1A", "2", "2A", "3", "4"]))
+        if staged
+        else str(rng.choice(["7", "7", "7", "9"])),
         "extent": str(rng.choice(["1", "2", "", "9"])),
-        "t": "X" if staged else "", "n": str(rng.choice(["0", "X"])) if staged else "",
-        "m": "0" if staged else "", "pt": "", "pn": "", "psu": "", "pm": "",
+        "t": "X" if staged else "",
+        "n": str(rng.choice(["0", "X"])) if staged else "",
+        "m": "0" if staged else "",
+        "pt": "",
+        "pn": "",
+        "psu": "",
+        "pm": "",
         "deceased": "0",
     }
 
@@ -145,12 +172,21 @@ def _patient_row(pid: str, tumor_id: int, sex: str, age: str, p: dict, rng: np.r
 def _episodes_for(pid: str, p: dict, age: str, rng: np.random.Generator) -> list[dict]:
     rows: list[dict] = []
     pattern = p["pattern"]
-    factor = {"long_stays_d70": 3.0, "short_stays": 0.3, "isolated_long": 4.0, "isolated_short": 0.2}.get(pattern, 1.0)
+    factor = {"long_stays_d70": 3.0, "short_stays": 0.3, "isolated_long": 4.0, "isolated_short": 0.2}.get(
+        pattern, 1.0
+    )
     patient_effect = float(rng.lognormal(0, 0.18))
 
     def add(start: int, end: int | None, dx: str) -> None:
-        rows.append({"patient_id": pid, "episode_id": f"{pid}-E{len(rows) + 1:03d}", "day_start": str(start),
-                     "day_end": "" if end is None else str(end), "dx_main": dx})
+        rows.append(
+            {
+                "patient_id": pid,
+                "episode_id": f"{pid}-E{len(rows) + 1:03d}",
+                "day_start": str(start),
+                "day_end": "" if end is None else str(end),
+                "dx_main": dx,
+            }
+        )
 
     birth = age == "0-5" and rng.random() < 0.3
     if birth:
@@ -194,8 +230,9 @@ def _episodes_for(pid: str, p: dict, age: str, rng: np.random.Generator) -> list
     return rows
 
 
-def _labs_for(pid: str, eps: pd.DataFrame, pattern: str, heavy: bool, negative: bool,
-              rng: np.random.Generator) -> list[dict]:
+def _labs_for(
+    pid: str, eps: pd.DataFrame, pattern: str, heavy: bool, negative: bool, rng: np.random.Generator
+) -> list[dict]:
     rows: list[dict] = []
     n_tests = int(rng.integers(2, 5))
     tests = [LAB_TESTS[i] for i in rng.choice(len(LAB_TESTS), size=n_tests, replace=False)]
@@ -207,17 +244,31 @@ def _labs_for(pid: str, eps: pd.DataFrame, pattern: str, heavy: bool, negative: 
         n = int(rng.integers(30, 60)) if heavy else int(rng.integers(1, 7))
         for _ in range(n):
             j = int(rng.integers(0, len(eps)))
-            day = int(starts[j]) + (int(rng.integers(0, max(1, int(ends[j] - starts[j]) + 1))) if not np.isnan(ends[j]) else 0)
+            day = int(starts[j]) + (
+                int(rng.integers(0, max(1, int(ends[j] - starts[j]) + 1))) if not np.isnan(ends[j]) else 0
+            )
             within = (starts <= day) & ((ends >= day) | np.isnan(ends))
-            episode_id = eps["episode_id"].iloc[int(np.argmax(within))] if within.any() and rng.random() > 0.35 else ""
+            episode_id = (
+                eps["episode_id"].iloc[int(np.argmax(within))] if within.any() and rng.random() > 0.35 else ""
+            )
             if negative and rng.random() < 0.3:
                 day, episode_id = -int(rng.integers(1, 40)), ""
             mean = mu * (0.45 if (pattern == "long_stays_d70" and code == "04471") else 1.0)
             value = round(max(0.01, float(rng.normal(mean, sd))), 2)
             has_range = rng.random() > 0.04
             flag = ("L" if value < lo else "H" if value > hi else "N") if has_range else ""
-            rows.append({"patient_id": pid, "episode_id": episode_id, "day": str(day), "test_code": code,
-                         "panel": panel, "value": f"{value}", "unit": unit,
-                         "ref_low": f"{lo}" if has_range else "", "ref_high": f"{hi}" if has_range else "",
-                         "flag": flag})
+            rows.append(
+                {
+                    "patient_id": pid,
+                    "episode_id": episode_id,
+                    "day": str(day),
+                    "test_code": code,
+                    "panel": panel,
+                    "value": f"{value}",
+                    "unit": unit,
+                    "ref_low": f"{lo}" if has_range else "",
+                    "ref_high": f"{hi}" if has_range else "",
+                    "flag": flag,
+                }
+            )
     return rows

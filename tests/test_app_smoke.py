@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
+from synthetic_data import generate_synthetic
 
 from rakathon.data.io import TABLE_FILES
 from rakathon.storage.csv_store import CsvStore
-from synthetic_data import generate_synthetic
 
 APP = Path(__file__).resolve().parents[1] / "app.py"
 
@@ -102,16 +102,50 @@ def test_global_recompute_creates_new_context(app):
     _button(at, "Uložit posouzení").click().run()  # posouzení ve výchozím globálním kontextu
     old_id = next(c.value for c in at.caption if "globální očekávání" in c.value)
 
-    method = next(s for s in at.sidebar.selectbox if s.label == "Metoda očekávání")
-    method.set_value("ridge_loo")
-    next(b for b in at.sidebar.button if b.label == "Přepočítat očekávání").click().run()
+    next(b for b in at.sidebar.button if b.label == "Jak počítáme očekávání").click().run()
+    assert any(c.label.startswith("Podobní pacienti") and c.value for c in at.checkbox)
+    next(c for c in at.checkbox if c.label.startswith("Statistický model")).check().run()
+    # volby metody jsou vzájemně výlučné
+    assert not next(c for c in at.checkbox if c.label.startswith("Podobní pacienti")).value
+    _button(at, "Přepočítat očekávání").click().run()
     assert not at.exception, [e.value for e in at.exception]
+    assert not any(c.label.startswith("Statistický model") for c in at.checkbox)  # dialog zavřen
     new_id = next(c.value for c in at.caption if "globální očekávání" in c.value)
     assert new_id != old_id
     assert any("Rozklad predikce modelu" in c.value for c in at.caption)
     # posouzení z předchozího kontextu není aktuální, jen v historii
     assert any("Neposouzeno" in m.value for m in at.markdown if "Aktuální posouzení" in m.value)
     assert any("1 jinde" in e.label for e in at.expander)
+
+
+def test_sidebar_is_simple(app):
+    at = app
+    sidebar_text = " ".join(
+        [c.value for c in at.sidebar.caption]
+        + [m.value for m in at.sidebar.markdown]
+        + [s.value for s in at.sidebar.success]
+    )
+    for hidden in ("Skutečná data", "otisk", "Kde leží data", "Kvalita dat", "Nahrané soubory"):
+        assert hidden not in sidebar_text
+    assert not at.sidebar.expander
+    assert any("pacientů" in c.value and "epizod" in c.value for c in at.sidebar.caption)
+    labels = [b.label for b in at.sidebar.button]
+    assert {"Data a import", "Jak počítáme očekávání", "Doplňkové vlastnosti"} <= set(labels)
+
+    # testovací CSV obsahují upozornění (více nádorů, neplatný interval) → zjednodušený přehled
+    warn = next(b for b in at.sidebar.button if b.label.startswith("Upozornění k datům"))
+    warn.click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    text = " ".join(m.value for m in at.markdown)
+    assert "více nádorů" in text and "konec dříve než začátek" in text
+    assert "multi_tumor" not in text and "day_end" not in text
+
+
+def test_import_dialog_opens(app):
+    at = app
+    next(b for b in at.sidebar.button if b.label == "Data a import").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any(b.label == "Načíst lokální data" for b in at.button)
 
 
 def test_reset_view_restores_defaults(app):

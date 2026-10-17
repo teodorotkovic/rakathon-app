@@ -8,6 +8,14 @@ import streamlit as st
 from rakathon.ui import sidebar, state
 
 st.set_page_config(page_title="Odchylky průběhu péče", page_icon=":material/monitor_heart:", layout="wide")
+# Větší ikony a text přepínání stránek v postranním panelu.
+st.html(
+    """<style>
+    [data-testid="stSidebarNavLink"] [data-testid="stIconMaterial"] { font-size: 1.6rem !important; }
+    [data-testid="stSidebarNavLink"] { padding-top: 0.45rem; padding-bottom: 0.45rem; gap: 0.6rem; }
+    [data-testid="stSidebarNavLink"] p, [data-testid="stSidebarNavLink"] span { font-size: 1.05rem; }
+    </style>"""
+)
 state.init()
 
 if not state.has_dataset():
@@ -20,7 +28,4 @@ pages = [
 ]
 navigation = st.navigation(pages)
 sidebar.render()
-st.sidebar.caption(
-    "Výzkumný hackathonový prototyp (Rakathon 2026) – nejde o ověřené klinické skóre ani doporučení léčby."
-)
 navigation.run()

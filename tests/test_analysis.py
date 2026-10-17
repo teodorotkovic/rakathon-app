@@ -7,11 +7,11 @@ import pandas as pd
 import pandas.testing as pdt
 import pytest
 from builders import EpisodeBuilder, build_bundle, cohort
+from synthetic_data import generate_synthetic
 
 from rakathon.analysis.detectors import robust_scale, run_robust_detector
 from rakathon.configuration import load_diagnosis_map, load_settings
 from rakathon.data.dataset import prepare_dataset
-from synthetic_data import generate_synthetic
 from rakathon.domain import AnalysisConfig, BaselineConfig, SourceMode
 from rakathon.pipeline import compute_analysis, compute_global
 

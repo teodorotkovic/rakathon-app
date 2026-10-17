@@ -53,6 +53,7 @@ K_IMPORT_REPORT = "last_failed_import_report"
 K_NONCE = "widget_nonce"
 K_FLASH = "flash_message"
 K_REVIEWER = "reviewer_label"
+K_DIALOG = "open_dialog"
 
 PATIENTS_PAGE = "views/patients.py"
 DEVIATIONS_PAGE = "views/deviations.py"
@@ -140,6 +141,7 @@ def reset_dataset_dependent_state() -> None:
     st.session_state[K_PENDING_EXCL] = {}
     st.session_state[K_BASELINE] = default_baseline_config(settings(), dxmap())
     st.session_state[K_ANALYSIS] = default_analysis_config(settings())
+    st.session_state[K_DIALOG] = None
     bump_nonce()
 
 
@@ -156,6 +158,16 @@ def init() -> None:
     ss.setdefault(K_INVESTIGATED, [])
     ss.setdefault(K_FOCUS, None)
     ss.setdefault(K_PENDING_EXCL, {})
+    ss.setdefault(K_DIALOG, None)
+
+
+def open_dialog(name: str) -> None:
+    """Otevřený dialog se drží ve stavu relace, aby přežil i celé přeběhnutí skriptu."""
+    st.session_state[K_DIALOG] = name
+
+
+def close_dialog() -> None:
+    st.session_state[K_DIALOG] = None
 
 
 def has_dataset() -> bool:

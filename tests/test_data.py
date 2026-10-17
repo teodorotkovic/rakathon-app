@@ -26,9 +26,7 @@ def test_episode_classification_and_length_without_plus_one(dxmap):
     eb.add("P0001", 10, 14, "C91")  # dokončená hospitalizace, délka 4
     eb.add("P0001", 20, None, "C91")  # bez propuštění
     eb.add("P0001", 30, 28, "C91")  # neplatný interval
-    bundle, report = prepare_dataset(
-        to_files([patient("P0001")], eb.rows, []), SourceMode.REAL, "t", dxmap
-    )
+    bundle, report = prepare_dataset(to_files([patient("P0001")], eb.rows, []), SourceMode.REAL, "t", dxmap)
     assert bundle is not None
     assert bundle.episodes["episode_class"].tolist() == [
         "outpatient",

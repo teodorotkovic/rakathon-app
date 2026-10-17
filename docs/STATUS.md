@@ -1,6 +1,6 @@
 # Stav projektu
 
-Aktualizováno: 2026-10-17 (noc), větev `main`, lokální commity M0–M4, nic nepushnuto.
+Aktualizováno: 2026-10-17, větev `main`, soukromý repozitář `teodorotkovic/rakathon-app`.
 
 ## Co funguje
 - Import skutečných dat z `data/` i nahráním v UI, validace (blokující/neblokující), content fingerprint,
@@ -13,21 +13,25 @@ Aktualizováno: 2026-10-17 (noc), větev `main`, lokální commity M0–M4, nic 
   (ukazatele/škála/práh, role výběru a reference, grafy s výběrem, seřazené případy, skupiny, kontext, pohledy).
 - Persistence posouzení s historií a kontextem, navržení vyřazení pacienta z globálního výpočtu, ZIP export.
 - Import doplňkových popisných vlastností s validací a opravitelným typem.
-- **P1:** volitelná baseline Ridge nad log1p s LOO a rozkladem příspěvků ze stejného fitu (přepínač
-  „Metoda očekávání“); popisné LOO chyby obou metod v postranním panelu.
+- **P1:** volitelná baseline Ridge nad log1p s LOO a rozkladem příspěvků ze stejného fitu (volba
+  „Statistický model“); popisná LOO chyba aktivní metody v *Jak počítáme očekávání → Pokročilé*.
+- Zjednodušený postranní panel podle zpětné vazby týmu: bez technických údajů (otisk, zpráva o validaci, cesty),
+  větší ikony navigace, velká okna (`st.dialog`) *Data a import*, *Jak počítáme očekávání* (zaškrtávací volby
+  s nápovědou „?“), *Doplňkové vlastnosti* a jen při potřebě *Upozornění k datům* (prosté věty).
 
 ## Provedené kontroly (2026-10-16/17)
 | Kontrola | Výsledek |
 |---|---|
 | `python -m uv sync` (Python 3.12.6, streamlit 1.66.0, pandas 3.0.6, numpy 2.5.4, plotly 7.1.0, scikit-learn 1.9.1) | OK |
 | `python -m uv sync --locked` | OK |
-| `python -m uv run pytest` | 35 passed (včetně 3 AppTest průchodů UI: lékařský průchod, globální přepočet, reset pohledu) |
+| `python -m uv run pytest` | 37 passed (AppTest: lékařský průchod, globální přepočet přes dialog, jednoduchý panel + upozornění, dialog importu, reset pohledu, obrazovka bez dat) |
 | Ridge vs. peer medián na skutečných datech | 107/157 hodnoceno u obou; medián \|rozdílu\| 1,13 vs. 1,25 dne; Ridge ~8 s výpočtu |
 | `python -m uv run ruff check .` | All checks passed |
 | `python -m uv run python scripts/check_real_data.py` (skutečná data) | 13/13 OK; 107 hodnotitelných, 3 nad prahem |
 | Spuštění `streamlit run app.py` + `GET /_stcore/health` | ok (skutečná i syntetická data) |
 | AppTest obou stránek na skutečných datech (ad hoc) | bez výjimek |
 | Vizuální kontrola headless Chrome (jen syntetika): přehled, detail, časová osa, analýza, skupiny | OK; nalezené vady opraveny (chybějící export bez uložených pohledů, šířka sloupců) |
+| Vizuální kontrola nového panelu (jen testovací syntetická CSV): ikony, dialog nastavení, dialog importu, zavření křížkem | OK |
 
 Neověřeno automaticky: gesta výběru v Plotly grafech a klik do tabulky v reálném prohlížeči uživatelem
 (viz manuální checklist v `docs/demo.md`).
