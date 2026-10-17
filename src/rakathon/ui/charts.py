@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import zlib
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -22,6 +24,9 @@ DIR_TEXT = {
 }
 
 LAYOUT = dict(margin=dict(l=10, r=10, t=40, b=10), height=360, legend=dict(orientation="h", y=-0.2))
+
+# Výběr bodů: dragmode NENASTAVOVAT. Streamlit při dragmode „select“/„lasso“ vypne výběr kliknutím;
+# bez něj klik na bod vybere pacienta a výběr obdélníkem zůstává v liště nástrojů grafu.
 
 
 def _jitter(n: int, seed: int = 0, width: float = 0.25) -> np.ndarray:
@@ -86,6 +91,8 @@ def reference_strip(
         xaxis_title=x_title,
         yaxis=dict(visible=False, range=[-1, 1]),
     )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
@@ -188,6 +195,8 @@ def timeline(eps: pd.DataFrame, selected_ids: set[str], anchor_day: float | None
         xaxis_title="den od první epizody (posun ±3 dny u pozdějších epizod)",
         yaxis=dict(categoryorder="array", categoryarray=TIMELINE_ROWS[::-1], title=""),
     )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
@@ -238,6 +247,8 @@ def lab_trend(sub: pd.DataFrame, label: str) -> go.Figure:
         xaxis_title="den odběru (může být záporný)",
         yaxis_title=s["unit"].iloc[0] if len(s) else "",
     )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
@@ -299,9 +310,9 @@ def residual_strip(df: pd.DataFrame, threshold: float, highlight: set[str], x_ti
         },
         xaxis_title=x_title,
         yaxis_title=None,
-        dragmode="select",
-        clickmode="event+select",
     )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
@@ -345,9 +356,9 @@ def observed_vs_expected(df: pd.DataFrame, highlight: set[str], metric_label: st
         title=f"{metric_label}: pozorováno vs. očekávání (dny)",
         xaxis_title="referenční očekávání (dny)",
         yaxis_title="pozorovaná hodnota (dny)",
-        dragmode="select",
-        clickmode="event+select",
     )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
@@ -392,10 +403,10 @@ def z_scatter(
         **{**LAYOUT, "height": 460},
         xaxis_title=x_label,
         yaxis_title=y_label,
-        dragmode="lasso",
-        clickmode="event+select",
         title="Standardizované odchylky dvou ukazatelů (čárkovaný čtverec = práh)",
     )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
@@ -420,6 +431,8 @@ def z_heatmap(mat: pd.DataFrame) -> go.Figure:
         **{**LAYOUT, "height": max(260, 28 * len(mat) + 80)},
         title="Profil standardizovaných odchylek outlierů (modrá = kratší, oranžová = delší)",
     )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
@@ -449,6 +462,8 @@ def category_compare(df: pd.DataFrame, title: str) -> go.Figure:
     fig.update_layout(
         **LAYOUT, barmode="group", title=title, yaxis=dict(tickformat=".0%", title="podíl pacientů")
     )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
@@ -461,6 +476,8 @@ def numeric_compare(sel: pd.Series, ref: pd.Series, title: str, unit: str) -> go
         go.Box(y=sel, name=f"vybraní (n={len(sel)})", marker_color=LONGER, boxpoints="all", jitter=0.4)
     )
     fig.update_layout(**LAYOUT, title=title, yaxis_title=unit, showlegend=False)
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 
@@ -537,7 +554,312 @@ def median_scatter(
         **{**LAYOUT, "height": 480},
         xaxis_title=x_label,
         yaxis_title=y_label,
-        dragmode="select",
-        clickmode="event+select",
+    )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
+    return fig
+
+
+BOX_FILL = "rgba(11,110,102,0.10)"
+BOX_LINE = "#0B6E66"
+
+
+def group_boxplot(
+    df: pd.DataFrame, order: list[str], value_label: str, highlight: set[str], show_all: bool
+) -> go.Figure:
+    """Krabicový graf po skupinách (vodorovně, skupiny na ose y).
+
+    df: group (popisek včetně n), value, patient_id, info. Krabice = 1.–3. kvartil, čára = medián,
+    vousy = nejvzdálenější hodnota do 1,5 × IQR od krabice (Tukey, výchozí chování Plotly),
+    body mimo vousy = odlehlé hodnoty. Při show_all se zobrazí všichni pacienti.
+    """
+    fig = go.Figure()
+    for grp in order:
+        sub = df[df["group"] == grp]
+        fig.add_trace(
+            go.Box(
+                x=sub["value"],
+                y=[grp] * len(sub),
+                name=grp,
+                orientation="h",
+                boxpoints="all" if show_all else "outliers",
+                jitter=0.35 if show_all else 0,
+                pointpos=0,
+                quartilemethod="linear",
+                fillcolor=BOX_FILL,
+                line=dict(color=BOX_LINE, width=1.5),
+                marker=dict(
+                    color=FAR,
+                    size=7 if show_all else 9,
+                    opacity=0.55 if show_all else 1,
+                    outliercolor=FAR,
+                    line=dict(width=0),
+                ),
+                customdata=np.stack([sub["patient_id"], sub["info"]], axis=-1),
+                hovertemplate="%{customdata[0]}<br>%{customdata[1]}<extra></extra>",
+                showlegend=False,
+            )
+        )
+    hl = df[df["patient_id"].isin(highlight)]
+    if len(hl):
+        fig.add_trace(
+            go.Scatter(
+                x=hl["value"],
+                y=hl["group"],
+                mode="markers+text",
+                text=hl["patient_id"],
+                textposition="top center",
+                marker=dict(color="rgba(0,0,0,0)", size=15, line=dict(color=HIGHLIGHT, width=2)),
+                name="vybraný pacient",
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+    fig.update_layout(
+        **{**LAYOUT, "height": max(280, 90 + 46 * len(order)), "margin": dict(l=10, r=10, t=20, b=20)},
+        xaxis=dict(title=value_label, automargin=True),
+        yaxis=dict(
+            categoryorder="array", categoryarray=list(reversed(order)), title=None, automargin=True,
+            type="category",
+        ),
+    )
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Grafy ve stylu „bod = pacient“ (kategorie, popisky, skupiny s n)
+# ---------------------------------------------------------------------------
+
+BORDER_GREY = "#5B6866"
+_CATEGORIES = [
+    # klíč, popisek v legendě, barva, symbol, velikost, popisovat ID
+    ("longer", "neobvykle delší", LONGER, "circle", 11, True),
+    ("shorter", "neobvykle kratší", SHORTER, "circle", 11, True),
+    ("near", "těsně pod hranicí", BORDER_GREY, "circle-open", 9, False),
+    ("normal", "běžný rozdíl", "#B4BCBA", "circle", 8, False),
+]
+
+
+def _jitter_for(ids: pd.Series, width: float = 0.28) -> np.ndarray:
+    """Stabilní rozptyl bodu podle ID (stejný pacient je vždy na stejném místě)."""
+    return np.array([((zlib.crc32(str(p).encode()) % 1000) / 999 - 0.5) * 2 * width for p in ids])
+
+
+def wrap_label(text: str, width: int = 14) -> str:
+    words, lines, cur = str(text).split(), [], ""
+    for w in words:
+        if cur and len(cur) + 1 + len(w) > width:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}".strip()
+    if cur:
+        lines.append(cur)
+    return "<br>".join(lines)
+
+
+def category_of(df: pd.DataFrame) -> pd.Series:
+    """outlier+direction → longer/shorter; band „těsně pod prahem“ → near; jinak normal."""
+    cat = pd.Series("normal", index=df.index)
+    cat[df["band"] == "těsně pod prahem"] = "near"
+    cat[df["outlier"] & (df["direction"] == "longer")] = "longer"
+    cat[df["outlier"] & (df["direction"] == "shorter")] = "shorter"
+    return cat
+
+
+def _add_category_traces(fig, df, x, y, highlight: set[str], text_pos: str = "middle right") -> None:
+    cat = category_of(df)
+    for key, name, color, symbol, size, label in _CATEGORIES:
+        m = (cat == key).to_numpy()
+        if not m.any():
+            continue
+        sub = df[m]
+        sel = sub["patient_id"].isin(highlight).to_numpy()
+        fig.add_trace(
+            go.Scatter(
+                x=np.asarray(x)[m],
+                y=np.asarray(y)[m],
+                mode="markers+text" if label else "markers",
+                text=sub["patient_id"] if label else None,
+                textposition=text_pos,
+                textfont=dict(size=11, color=color),
+                name=name,
+                marker=dict(
+                    color=color,
+                    symbol=symbol,
+                    size=np.where(sel, size + 5, size),
+                    line=dict(color=np.where(sel, HIGHLIGHT, color).tolist(), width=np.where(sel, 2.5, 1.5)),
+                ),
+                customdata=np.stack([sub["patient_id"], sub["info"]], axis=-1),
+                hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
+            )
+        )
+    weak = df["weak"].to_numpy(dtype=bool)
+    if weak.any():
+        sub = df[weak]
+        fig.add_trace(
+            go.Scatter(
+                x=np.asarray(x)[weak],
+                y=np.asarray(y)[weak],
+                mode="markers",
+                name="méně spolehlivé srovnání",
+                marker=dict(color=HIGHLIGHT, symbol="x-thin", size=9, line=dict(width=1.6, color=HIGHLIGHT)),
+                customdata=np.stack([sub["patient_id"], sub["info"]], axis=-1),
+                hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<br>méně spolehlivé srovnání"
+                "<extra></extra>",
+            )
+        )
+
+
+def deviation_by_group(df: pd.DataFrame, threshold: float, highlight: set[str], y_title: str) -> go.Figure:
+    """Svislý graf: skupiny diagnóz na ose x (s n), míra odchylky na ose y, pás běžných rozdílů.
+
+    df: patient_id, z, group_label, outlier, direction, band, weak, info.
+    """
+    order = df.groupby("group_label")["z"].median().sort_values(ascending=False).index.tolist()
+    counts = df["group_label"].value_counts()
+    pos = {g: i for i, g in enumerate(order)}
+    x = df["group_label"].map(pos).to_numpy(dtype=float) + _jitter_for(df["patient_id"])
+    fig = go.Figure()
+    fig.add_hrect(y0=-threshold, y1=threshold, fillcolor="rgba(120,135,132,0.13)", line_width=0, layer="below")
+    fig.add_hline(y=0, line=dict(color=HIGHLIGHT, width=1))
+    _add_category_traces(fig, df, x, df["z"], highlight)
+    fig.update_layout(
+        **{
+            **LAYOUT,
+            "height": 500,
+            "margin": dict(l=10, r=10, t=60, b=10),
+            "legend": dict(orientation="h", y=1.02, yanchor="bottom", x=0, xanchor="left"),
+        },
+        xaxis=dict(
+            tickmode="array",
+            tickvals=list(range(len(order))),
+            ticktext=[f"{wrap_label(g)}<br>(n={counts[g]})" for g in order],
+            range=[-0.6, len(order) - 0.4],
+            showgrid=False,
+            zeroline=False,
+            automargin=True,
+        ),
+        yaxis=dict(title=y_title, zeroline=False, automargin=True),
+    )
+    fig.add_annotation(
+        x=1, xref="paper", xanchor="right", y=threshold, yanchor="bottom", showarrow=False,
+        text=f"hranice ±{threshold:g}".replace(".", ","), font=dict(size=11, color="#56635F"),
+    )
+    return fig
+
+
+_LOG_TICKS = [0, 1, 2, 5, 10, 20, 50, 100, 200, 500]
+
+
+def fact_vs_expectation(
+    df: pd.DataFrame,
+    scale: str,
+    center: float,
+    spread: float,
+    threshold: float,
+    highlight: set[str],
+    metric_label: str,
+) -> go.Figure:
+    """Skutečnost vs. očekávání. Úhlopříčka = přesně podle očekávání, čárkované čáry = hranice.
+
+    Na škále „log“ jsou osy log(1 + dny) (stejná škála, na které se odchylka počítá), popisky jsou ve dnech.
+    df: patient_id, observed, expected, outlier, direction, band, weak, info.
+    """
+    log = scale == "log"
+    tf = np.log1p if log else (lambda v: v)
+    x, y = tf(df["expected"].astype(float)), tf(df["observed"].astype(float))
+    hi = float(np.nanmax([x.max(), y.max()])) * 1.05 + (0.1 if log else 1)
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=[0, hi], y=[0, hi], mode="lines", name="přesně podle očekávání",
+            line=dict(color=HIGHLIGHT, width=1.2), hoverinfo="skip",
+        )
+    )
+    if np.isfinite(spread):
+        for k, nm in ((1, "hranice neobvyklosti"), (-1, None)):
+            off = center + k * threshold * spread
+            fig.add_trace(
+                go.Scatter(
+                    x=[0, hi], y=[off, hi + off], mode="lines", name=nm or "", showlegend=nm is not None,
+                    line=dict(color=HIGHLIGHT, width=1, dash="dash"), hoverinfo="skip",
+                )
+            )
+    _add_category_traces(fig, df, x, y, highlight, text_pos="top center")
+    axis = dict(range=[0, hi], zeroline=False, automargin=True)
+    if log:
+        ticks = [t for t in _LOG_TICKS if np.log1p(t) <= hi]
+        axis.update(
+            tickmode="array", tickvals=[float(np.log1p(t)) for t in ticks], ticktext=[str(t) for t in ticks]
+        )
+    fig.update_layout(
+        **{
+            **LAYOUT,
+            "height": 560,
+            "margin": dict(l=10, r=10, t=60, b=10),
+            "legend": dict(orientation="h", y=1.02, yanchor="bottom", x=0, xanchor="left"),
+        },
+        xaxis=dict(axis, title=f"očekávání – {metric_label.lower()} (dny)"),
+        yaxis=dict(axis, title=f"skutečnost – {metric_label.lower()} (dny)", scaleanchor="x", scaleratio=1),
+    )
+    return fig
+
+
+def group_points(df: pd.DataFrame, order: list[str], value_label: str, highlight: set[str]) -> go.Figure:
+    """Body po skupinách s čarou mediánu (svisle). df: group, value, patient_id, info, cat."""
+    pos = {g: i for i, g in enumerate(order)}
+    fig = go.Figure()
+    colors = {"longer": LONGER, "shorter": SHORTER}
+    for i, g in enumerate(order):
+        med = float(df.loc[df["group"] == g, "value"].median())
+        fig.add_shape(
+            type="line", x0=i - 0.32, x1=i + 0.32, y0=med, y1=med, line=dict(color=HIGHLIGHT, width=3)
+        )
+    x = df["group"].map(pos).to_numpy(dtype=float) + _jitter_for(df["patient_id"], 0.22)
+    kinds = (("normal", "pacient"), ("longer", "neobvykle delší pobyty"), ("shorter", "neobvykle kratší pobyty"))
+    for key, name in kinds:
+        m = (df["cat"] == key).to_numpy()
+        if not m.any():
+            continue
+        sub = df[m]
+        sel = sub["patient_id"].isin(highlight).to_numpy()
+        fig.add_trace(
+            go.Scatter(
+                x=x[m],
+                y=sub["value"],
+                mode="markers",
+                name=name,
+                marker=dict(
+                    color=colors.get(key, "#8E9896"),
+                    size=np.where(sel, 14, 8),
+                    opacity=0.9,
+                    line=dict(color=HIGHLIGHT, width=np.where(sel, 2.5, 0)),
+                ),
+                customdata=np.stack([sub["patient_id"], sub["info"]], axis=-1),
+                hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>",
+            )
+        )
+    fig.update_layout(
+        **{
+            **LAYOUT,
+            "height": 500,
+            "margin": dict(l=10, r=10, t=50, b=10),
+            "legend": dict(orientation="h", y=1.02, yanchor="bottom", x=0, xanchor="left"),
+        },
+        xaxis=dict(
+            tickmode="array",
+            tickvals=list(range(len(order))),
+            ticktext=[
+                f"{wrap_label(g.rsplit(' (n=', 1)[0])}<br>(n={g.rsplit(' (n=', 1)[1]}" if " (n=" in g else g
+                for g in order
+            ],
+            range=[-0.6, len(order) - 0.4],
+            showgrid=False,
+            automargin=True,
+        ),
+        yaxis=dict(title=value_label, automargin=True),
     )
     return fig
