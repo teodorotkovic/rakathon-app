@@ -244,18 +244,28 @@ def lab_trend(sub: pd.DataFrame, label: str) -> go.Figure:
 def residual_strip(df: pd.DataFrame, threshold: float, highlight: set[str], x_title: str) -> go.Figure:
     """df: patient_id, z, direction, outlier, group_label, observed, expected, residual."""
     fig = go.Figure()
-    for flag, name, opacity in ((False, "bez výrazné odchylky", 0.45), (True, "nad prahem", 1.0)):
+    grey_shown = False
+    for flag, opacity in ((False, 0.45), (True, 1.0)):
         for d in ("longer", "shorter", "equal"):
             sub = df[(df["outlier"] == flag) & (df["direction"] == d)]
             if not len(sub):
                 continue
             color = COLOR[d] if flag else NEUTRAL
+            name = (
+                {"longer": "▲ neobvykle delší", "shorter": "▼ neobvykle kratší"}.get(d, "neobvyklé")
+                if flag
+                else "běžný rozdíl"
+            )
+            show = flag or not grey_shown
+            grey_shown = grey_shown or not flag
             fig.add_trace(
                 go.Scatter(
                     x=sub["z"],
                     y=sub["group_label"],
                     mode="markers",
-                    name=f"{name}: {DIR_TEXT[d]}",
+                    name=name,
+                    showlegend=show,
+                    legendgroup="grey" if not flag else d,
                     marker=dict(
                         color=color,
                         symbol=SYMBOL[d],
@@ -273,12 +283,13 @@ def residual_strip(df: pd.DataFrame, threshold: float, highlight: set[str], x_ti
                 )
             )
     for x in (threshold, -threshold):
-        fig.add_vline(x=x, line=dict(color=HIGHLIGHT, dash="dash"), annotation_text=f"práh {x:+g}")
+        fig.add_vline(x=x, line=dict(color=HIGHLIGHT, dash="dash"), annotation_text=f"hranice {x:+g}")
     fig.update_layout(
-        **{**LAYOUT, "height": 420},
+        **{**LAYOUT, "height": 420, "legend": dict(orientation="h", y=1.12, x=0)},
         xaxis_title=x_title,
-        yaxis_title="orientační diagnostická skupina",
+        yaxis_title=None,
         dragmode="select",
+        clickmode="event+select",
     )
     return fig
 
@@ -324,6 +335,7 @@ def observed_vs_expected(df: pd.DataFrame, highlight: set[str], metric_label: st
         xaxis_title="referenční očekávání (dny)",
         yaxis_title="pozorovaná hodnota (dny)",
         dragmode="select",
+        clickmode="event+select",
     )
     return fig
 
@@ -370,6 +382,7 @@ def z_scatter(
         xaxis_title=x_label,
         yaxis_title=y_label,
         dragmode="lasso",
+        clickmode="event+select",
         title="Standardizované odchylky dvou ukazatelů (čárkovaný čtverec = práh)",
     )
     return fig
@@ -514,5 +527,6 @@ def median_scatter(
         xaxis_title=x_label,
         yaxis_title=y_label,
         dragmode="select",
+        clickmode="event+select",
     )
     return fig

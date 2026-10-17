@@ -368,9 +368,7 @@ def _distribution(g: GlobalResults, a: AnalysisResult, chart_key: str) -> None:
         df = w.rename(
             columns={f"z__{m0}": "z", f"obs__{m0}": "observed", f"exp__{m0}": "expected", f"res__{m0}": "residual"}
         )
-        fig = charts.residual_strip(
-            df, a.config.threshold, highlight, "míra odchylky (← kratší než obvykle · delší než obvykle →)"
-        )
+        fig = charts.residual_strip(df, a.config.threshold, highlight, "← kratší · míra odchylky · delší →")
         st.plotly_chart(
             fig, key=chart_key, on_select="rerun", selection_mode=("points", "box", "lasso"), width="stretch"
         )
@@ -475,10 +473,9 @@ def _card(g, a, r: pd.Series, t: pd.DataFrame, rv: pd.Series, focus: str | None)
             badges.append(f":blue-badge[{review_label(status)}]")
         if r.get("cluster_label") and str(r["cluster_label"]).startswith("Skupina"):
             badges.append(f":violet-badge[{r['cluster_label']}]")
-        b1, b2 = st.columns([2.2, 1], vertical_alignment="center")
-        b1.markdown(" ".join(badges))
-        b2.button(
-            "Vybráno" if pid == focus else "Vysvětlit",
+        st.markdown(" ".join(badges))
+        st.button(
+            "Vysvětleno níže" if pid == focus else "Vysvětlit",
             key=f"dv_pick_{pid}",
             type="primary" if pid == focus else "secondary",
             icon=":material/check:" if pid == focus else ":material/arrow_downward:",
@@ -500,7 +497,7 @@ def _pick(pid: str) -> None:
 
 def _focus(g: GlobalResults, a: AnalysisResult) -> None:
     inv = [p for p in st.session_state.get(state.K_INVESTIGATED, []) if p in set(g.core["patient_id"])]
-    st.markdown(f"### Vybraní pacienti ({len(inv)})")
+    st.markdown("### Vysvětlení pacienta")
     if not inv:
         st.caption(
             "Klikněte na bod v grafu nebo na „Vysvětlit“ u pacienta v seznamu – zde se ukáže, proč je "
@@ -512,7 +509,7 @@ def _focus(g: GlobalResults, a: AnalysisResult) -> None:
         focus = inv[0]
     if len(inv) > 1:
         focus = st.selectbox(
-            f"Vybráno {len(inv)} pacientů – vysvětlit:", inv, index=inv.index(focus), key=f"dv_focus_{state.nonce()}"
+            f"Vybráno {len(inv)} pacientů (z grafu nebo skupiny) – vysvětlit:", inv, index=inv.index(focus), key=f"dv_focus_{state.nonce()}"
         )
     s = a.scores.set_index("patient_id").loc[focus]
     t = g.patient_table.set_index("patient_id").loc[focus]
@@ -571,7 +568,7 @@ def _why_lines(g: GlobalResults, a: AnalysisResult, pid: str, s: pd.Series) -> l
         lines.append(
             f"**S kým porovnáváme:** {_n_phrase(n_ref, 'podobný pacient', 'podobní pacienti', 'podobných pacientů')}"
             + (f" ({level})" if level else "")
-            + f"; do výpočtu pacienta vstupuje {_n_phrase(int(d['support_n']), 'pobyt', 'pobyty', 'pobytů')}."
+            + f"; u pacienta se počítá z {_n_phrase(int(d['support_n']), 'pobytu', 'pobytů', 'pobytů')}."
         )
 
     z = abs(float(d["z"]))
