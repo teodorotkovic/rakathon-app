@@ -23,7 +23,7 @@ from rakathon.features.catalog import EPISODE_RULES, descriptor_columns
 from rakathon.formatting import fmt_days, fmt_num, fmt_signed_days
 from rakathon.pipeline import GlobalResults
 from rakathon.storage import exports
-from rakathon.ui import charts, components, state
+from rakathon.ui import charts, components, state, texts
 
 AGE_ORDER = ["0-5", "6-8", "9-11", "12-14", "15-17", "18-20"]
 
@@ -65,9 +65,18 @@ def overview_table(g: GlobalResults, a: AnalysisResult, reviews_cur: pd.DataFram
     df["Směr"] = (
         s["direction"].map(lambda d: components.direction_text(d, short=True)).where(s["scored"], "–")
     )
-    df["Opora reference"] = r.apply(components.support_text, axis=1)
+    df["Typ odchylky"] = s["band"]
     df["Posouzení"] = [review_label(rv.get(p, "")) for p in df.index]
-    df["Pásmo"] = s["band"]
+    df["Spolehlivost"] = [
+        reliability_text(
+            bool(s.at[p, "scored"]),
+            r.at[p, "baseline_status"],
+            int(r.at[p, "support_n"]),
+            a.config.min_support_stays,
+        )
+        for p in df.index
+    ]
+    df["Podobných pacientů"] = r["reference_n"].astype(float).where(r["reference_n"] > 0)
     df["Pobytů"] = r["support_n"].astype(int)
     df["Důvod nehodnocení"] = s["not_scored_reason"]
     # skryté pomocné sloupce pro filtry
@@ -86,6 +95,28 @@ def overview_table(g: GlobalResults, a: AnalysisResult, reviews_cur: pd.DataFram
     return df.reset_index(drop=True)
 
 
+def reliability_text(scored: bool, baseline_status: str, support_n: int, min_stays: int) -> str:
+    """Spolehlivost srovnání jedním slovem + důvod; pro lékaře místo „opory reference“."""
+    if not scored:
+        return "– nelze porovnat"
+    reasons = []
+    if baseline_status == "limited_reference":
+        reasons.append("málo podobných pacientů")
+    if support_n < min_stays:
+        reasons.append(f"jen {support_n} pobyt" if support_n == 1 else f"jen {support_n} pobyty")
+    return "⚠ omezená (" + ", ".join(reasons) + ")" if reasons else "✓ dobrá"
+
+
+def patient_from_cell_selection(cells: list, table: pd.DataFrame) -> str | None:
+    """Klik do libovolné buňky řádku → ID pacienta (podle pozice v tabulce předané widgetu)."""
+    if not cells:
+        return None
+    row = cells[0][0] if isinstance(cells[0], (list, tuple)) else cells[0]
+    if not isinstance(row, int) or not 0 <= row < len(table):
+        return None
+    return str(table.iloc[row]["ID"])
+
+
 def _filters(df: pd.DataFrame, g: GlobalResults) -> tuple[pd.DataFrame, dict]:
     with st.expander("Filtry a vyhledávání", expanded=False, icon=":material/filter_alt:"):
         c1, c2, c3, c4 = st.columns([1.2, 1.5, 1, 2])
@@ -99,11 +130,11 @@ def _filters(df: pd.DataFrame, g: GlobalResults) -> tuple[pd.DataFrame, dict]:
             "Dostupnost",
             [
                 "vše",
-                "jen hodnocení",
-                "jen nehodnotitelní",
+                "jen porovnatelní",
+                "jen neporovnatelní",
                 "s laboratořemi",
                 "bez laboratoří",
-                "jen omezená opora",
+                "jen omezená spolehlivost",
             ],
             key="pf_avail",
         )
@@ -144,11 +175,11 @@ def _filters(df: pd.DataFrame, g: GlobalResults) -> tuple[pd.DataFrame, dict]:
         m &= df["Diagnóza"].isin(dxs)
     m &= {
         "vše": True,
-        "jen hodnocení": df["_scored"],
-        "jen nehodnotitelní": ~df["_scored"],
+        "jen porovnatelní": df["_scored"],
+        "jen neporovnatelní": ~df["_scored"],
         "s laboratořemi": df["_has_labs"],
         "bez laboratoří": ~df["_has_labs"],
-        "jen omezená opora": df["_support"] == "omezená opora",
+        "jen omezená spolehlivost": df["Spolehlivost"].str.startswith("⚠"),
     }[avail]
     if direction != "oba":
         m &= df["_direction"] == ("longer" if direction.startswith("delší") else "shorter")
@@ -175,23 +206,9 @@ def _filters(df: pd.DataFrame, g: GlobalResults) -> tuple[pd.DataFrame, dict]:
 
 def render_overview(g: GlobalResults, a: AnalysisResult) -> None:
     metric = a.config.metrics[0]
-    components.context_caption(
-        g,
-        f"výchozí pohled: práh {fmt_num(a.config.threshold)}, "
-        f"{'relativní (log) škála' if a.config.scale == 'log' else 'dny'}",
-    )
-    rule = g.baseline.config.episode_rule
-    with st.expander("Jak číst tento přehled", icon=":material/help:"):
-        st.markdown(
-            f"- **Ukazatel:** {g.metric_long_labels[metric]}. Nejde o kompletní zátěž onkologické léčby.\n"
-            f"- **Očekávání** = medián stejného ukazatele u jiných podobných pacientů (stejná diagnóza, případně věk a "
-            "pohlaví; při nedostatku případů širší skupina). Pacient se do vlastní reference nepočítá.\n"
-            "- **Míra odchylky** = o kolik se rozdíl liší od typického rozdílu v kohortě (robustní standardizace). "
-            f"Práh {fmt_num(a.config.threshold)} je pracovní heuristika, ne pravděpodobnost.\n"
-            "- **Směr**: ▲ delší / ▼ kratší zaznamenaný pobyt než očekávání. Kratší pobyt neznamená automaticky "
-            "lepší průběh.\n"
-            f"- **Omezení:** {EPISODE_RULES[rule]['limitation']} Den 0 je první záznam v nemocnici, ne diagnóza."
-        )
+    cfg = g.baseline.config
+    st.markdown(texts.plain_context(cfg.method, cfg.episode_rule, metric))
+    st.caption("Nastavení změníte v postranním panelu → Jak počítáme očekávání.")
     reviews_cur = state.reviews_current()
     full = overview_table(g, a, reviews_cur)
     df, filters = _filters(full, g)
@@ -199,35 +216,34 @@ def render_overview(g: GlobalResults, a: AnalysisResult) -> None:
     n_total = len(full)
     n_scored = int(full["_scored"].sum())
     outl = full[full["_outlier"]]
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Hodnoceno", f"{n_scored} / {n_total}")
+    n_strong = int((outl["Typ odchylky"] == "výrazná odchylka").sum())
+    c1, c2, _ = st.columns([1, 1, 2])
+    c1.metric(
+        "Lze porovnat",
+        f"{n_scored} / {n_total}",
+        help="Pacienti, u kterých je dostupný výsledek i dost podobných pacientů pro srovnání. U ostatních je "
+        "v tabulce uveden důvod.",
+    )
     c2.metric(
-        f"Nad prahem {fmt_num(a.config.threshold)}",
+        "Neobvyklé případy",
         len(outl),
-        help=f"▲ delší: {int((outl['_direction'] == 'longer').sum())} · ▼ kratší: "
-        f"{int((outl['_direction'] == 'shorter').sum())}",
-    )
-    c3.metric(
-        "Omezená opora dat",
-        int((full["_support"] == "omezená opora").sum()),
-        help="Omezená reference (4–7 pacientů) nebo méně než 2 pobyty ve výpočtu.",
-    )
-    c4.metric(
-        "Nelze posoudit",
-        n_total - n_scored,
-        help="Chybí výsledek nebo srovnatelná reference. Zobrazí se na konci tabulky; filtr Dostupnost.",
+        help=f"Pacienti, jejichž délka pobytů se od očekávání liší mnohem víc než u většiny ostatních "
+        f"(výrazné {n_strong}, hraniční {len(outl) - n_strong}; ▲ delší "
+        f"{int((outl['_direction'] == 'longer').sum())}, ▼ kratší {int((outl['_direction'] == 'shorter').sum())}).",
     )
 
     st.caption(
-        f"Zobrazeno {len(df)} z {n_total} pacientů · seřazeno podle míry odchylky, nehodnotitelní na konci. "
-        "Kliknutím na řádek otevřete detail."
+        f"Zobrazeno {len(df)} z {n_total} pacientů. Výchozí řazení je od největší odchylky (pacienti, které nelze "
+        "porovnat, jsou na konci); kliknutím na záhlaví sloupce seřadíte jinak. **Klikněte na řádek pro detail "
+        "pacienta.**"
     )
     shown = [c for c in df.columns if not c.startswith("_")]
+    table = df[shown]
     event = st.dataframe(
-        df[shown],
+        table,
         key=f"patients_table_{state.nonce()}",
         on_select="rerun",
-        selection_mode="single-row",
+        selection_mode="single-cell",
         hide_index=True,
         height=440,
         width="stretch",
@@ -236,25 +252,37 @@ def render_overview(g: GlobalResults, a: AnalysisResult) -> None:
             "Očekávání (dny)": st.column_config.NumberColumn(format="%.1f"),
             "Rozdíl (dny)": st.column_config.NumberColumn(format="%+.1f"),
             "Míra odchylky": st.column_config.NumberColumn(
-                format="%.2f", help="Maximum |standardizované odchylky|."
+                format="%.2f", help="Čím vyšší, tím neobvyklejší rozdíl oproti ostatním pacientům."
             ),
+            "Spolehlivost": st.column_config.TextColumn(
+                help="Omezená = srovnání jen s 4–7 podobnými pacienty nebo výsledek z jediného pobytu."
+            ),
+            "Podobných pacientů": st.column_config.NumberColumn(format="%d"),
             "Důvod nehodnocení": st.column_config.TextColumn(width="large"),
         },
     )
-    rows = event.selection.rows if event is not None else []
-    if rows:
-        state.open_patient(str(df.iloc[rows[0]]["ID"]))
+    pid = patient_from_cell_selection(event.selection.cells if event is not None else [], table)
+    if pid:
+        state.open_patient(pid)
         st.rerun()
 
-    c1, c2, c3 = st.columns([2, 1, 2])
-    pick = c1.selectbox(
-        "Otevřít pacienta podle ID", df["ID"].tolist(), index=None, key="pf_pick", placeholder="vyberte ID…"
-    )
-    if c2.button("Otevřít detail", key="pf_open", disabled=pick is None):
-        state.open_patient(pick)
-        st.rerun()
-    with c3:
+    _, c2 = st.columns([3, 2])
+    with c2:
         _export_button(g, a, df["ID"].tolist(), "Pacienti – výchozí pohled", filters, key="dl_patients")
+
+    st.divider()
+    with st.expander("Jak číst tento přehled", icon=":material/help:"):
+        st.markdown(
+            "- **Pozorováno / Očekávání / Rozdíl** – skutečná délka pobytů pacienta, typická délka u srovnávaných "
+            "pacientů a rozdíl ve dnech.\n"
+            "- **Míra odchylky** – o kolik je rozdíl neobvyklejší než rozdíly u ostatních pacientů. **Neobvyklé "
+            f"případy** jsou od hodnoty {fmt_num(a.config.threshold)} (pracovní hranice, lze změnit v Analýze "
+            "odchylek); nejde o pravděpodobnost.\n"
+            "- **Směr** – ▲ delší / ▼ kratší pobyty než očekávání. Kratší pobyt neznamená automaticky lepší průběh.\n"
+            "- **Spolehlivost** – omezená, pokud je podobných pacientů málo nebo výsledek stojí na jediném pobytu.\n"
+            f"- **Omezení dat:** {EPISODE_RULES[cfg.episode_rule]['limitation']} Den 0 v datech je první záznam "
+            "v nemocnici, ne datum diagnózy."
+        )
 
 
 def _export_button(
@@ -317,7 +345,6 @@ def render_detail(pid: str, g: GlobalResults, a: AnalysisResult) -> None:
         f"věková skupina {core['age_group']} · pohlaví {core['sex']}"
         + (" · ⚠ více nádorů – vyřazen z baseline" if core["multi_tumor"] else "")
     )
-    components.context_caption(g, f"výchozí pohled `{a.analysis_id}`")
     c = st.columns(5)
     c[0].metric(
         g.metric_labels[main],
@@ -330,13 +357,13 @@ def render_detail(pid: str, g: GlobalResults, a: AnalysisResult) -> None:
     c[2].metric("Rozdíl", fmt_signed_days(r["residual"]) if pd.notna(r["residual"]) else "–")
     c[3].metric(
         "Míra odchylky",
-        fmt_num(srow["score"], 2) if srow["scored"] else "nehodnoceno",
-        help="Pracovní práh " + fmt_num(a.config.threshold),
+        fmt_num(srow["score"], 2) if srow["scored"] else "nelze porovnat",
+        help=f"Neobvyklý případ od hodnoty {fmt_num(a.config.threshold)} (pracovní hranice).",
     )
     n_ref = int(r["reference_n"])
     c[4].metric(
-        "Opora reference",
-        f"{n_ref} pac." if n_ref else "nelze posoudit",
+        "Podobných pacientů",
+        str(n_ref) if n_ref else "–",
         help=components.support_text(r) + (f" – {r['baseline_reason']}" if r["baseline_reason"] else ""),
     )
     if srow["scored"]:
@@ -345,21 +372,21 @@ def render_detail(pid: str, g: GlobalResults, a: AnalysisResult) -> None:
             + (f" · ⚠ {srow['support_notes']}" if srow["support_notes"] else "")
         )
     else:
-        st.info(f"Pacient není hodnocen: {srow['not_scored_reason']}")
+        st.info(f"Pacienta nelze porovnat: {srow['not_scored_reason']}")
 
     if st.session_state.get(state.K_FROM_ANALYSIS):
         la = state.local_analysis()
         if la.analysis_id != a.analysis_id:
             ls = la.scores.set_index("patient_id").loc[pid]
             st.caption(
-                f"Z pohledu **Analýza odchylek** (`{la.analysis_id}`, práh {fmt_num(la.config.threshold)}, "
+                f"Z pohledu **Analýza odchylek** (hranice {fmt_num(la.config.threshold)}, "
                 f"ukazatele: {', '.join(g.metric_labels[m] for m in la.config.metrics)}): "
                 + (
                     f"míra odchylky {fmt_num(ls['score'], 2)}, {ls['band']}"
                     if ls["scored"]
-                    else "nehodnoceno"
+                    else "nelze porovnat"
                 )
-                + ". Globální očekávání je stejné."
+                + ". Očekávání je stejné jako zde."
             )
 
     left, right = st.columns([2.3, 1])
@@ -593,14 +620,14 @@ def _tab_similar(pid: str, g: GlobalResults, a: AnalysisResult) -> None:
     ).drop(columns="similarity")
     st.caption(
         "Podobnost podle výchozích charakteristik (diagnóza/skupina, věk, pohlaví) – posuzovaný výsledek "
-        "není kritériem. Kliknutím otevřete pacienta."
+        "není kritériem. Klikněte na řádek pro detail pacienta."
     )
     ev = st.dataframe(
         view,
         hide_index=True,
         width="stretch",
         on_select="rerun",
-        selection_mode="single-row",
+        selection_mode="single-cell",
         key=f"similar_{pid}_{state.nonce()}",
         column_config={
             "Pozorováno": st.column_config.NumberColumn(format="%.1f"),
@@ -608,10 +635,9 @@ def _tab_similar(pid: str, g: GlobalResults, a: AnalysisResult) -> None:
             "Míra odchylky": st.column_config.NumberColumn(format="%.2f"),
         },
     )
-    if ev is not None and ev.selection.rows:
-        state.open_patient(
-            str(view.iloc[ev.selection.rows[0]]["ID"]), st.session_state.get(state.K_FROM_ANALYSIS)
-        )
+    other = patient_from_cell_selection(ev.selection.cells if ev is not None else [], view)
+    if other:
+        state.open_patient(other, st.session_state.get(state.K_FROM_ANALYSIS))
         state.bump_nonce()
         st.rerun()
 

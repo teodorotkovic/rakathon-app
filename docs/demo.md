@@ -8,8 +8,8 @@ python -m uv run streamlit run app.py --server.address 127.0.0.1
 ```
 
 ## Průchod
-1. **Případ (Pacienti, 45 s).** Ukázat metriky (hodnoceno / nad prahem /
-   omezená opora / nelze posoudit) a seřazený seznam. Rozbalit „Jak číst tento přehled“.
+1. **Případ (Pacienti, 45 s).** Přečíst dvě věty nahoře (co sledujeme, s kým porovnáváme), ukázat počty
+   *Lze porovnat* a *Neobvyklé případy* a seřazený seznam se sloupcem *Spolehlivost*.
 2. **Vysvětlení (60 s).** Kliknout na první řádek. A: „Očekávání 5 dní = medián 19 pacientů se stejnou diagnózou…
    věk a pohlaví nejsou zohledněny“. Graf reference. B: rozdíl, standardizovaná odchylka, citlivost prahu,
    kontrafaktuál. C: čím se liší od srovnávaných (hypotézy). Záložka Časová osa (pobyty ve výpočtu oranžově).
@@ -27,7 +27,8 @@ python -m uv run streamlit run app.py --server.address 127.0.0.1
 - [ ] Výběr bodů v grafu (klik, obdélník, laso) se propíše do levého panelu („Vybráno N pacientů z grafu“).
 - [ ] „Zobrazit vybrané“ nastaví vyšetřovaný výběr a zvýrazní body; „Zrušit výběr“ ho vymaže.
 - [ ] „Použít jako referenci“ změní řádek „Lokální reference“ a standardizaci, ne očekávání v detailu.
-- [ ] Klik na řádek v tabulce Pacienti otevře detail téhož ID; „← Zpět na seznam“ vrátí přehled.
+- [ ] Klik do libovolné buňky řádku v tabulce Pacienti (bez zaškrtávacího pole) otevře detail téhož ID, i po
+      přeřazení sloupců kliknutím na záhlaví; „← Zpět na seznam“ vrátí přehled. Totéž v tabulce podobných pacientů.
 - [ ] *Jak počítáme očekávání*: zaškrtnutí jiné volby odškrtne předchozí, „?“ ukáže vysvětlení, „Přepočítat
       očekávání“ okno zavře a změní ID konfigurace v liště stránky; dřívější posouzení se ukáže v historii
       „jiný kontext“. Křížek okno zavře bez změny.

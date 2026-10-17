@@ -18,13 +18,17 @@ Aktualizováno: 2026-10-17, větev `main`, soukromý repozitář `teodorotkovic/
 - Zjednodušený postranní panel podle zpětné vazby týmu: bez technických údajů (otisk, zpráva o validaci, cesty),
   větší ikony navigace, velká okna (`st.dialog`) *Data a import*, *Jak počítáme očekávání* (zaškrtávací volby
   s nápovědou „?“), *Doplňkové vlastnosti* a jen při potřebě *Upozornění k datům* (prosté věty).
+- Zjednodušená stránka Pacienti: místo technické lišty dvě věty „co sledujeme / s kým porovnáváme“, metriky
+  *Lze porovnat* a *Neobvyklé případy*, sloupce *Spolehlivost* a *Podobných pacientů*, otevření detailu
+  kliknutím do řádku (bez zaškrtávacích polí a bez výběru podle ID), vysvětlivky pod tabulkou.
 
 ## Provedené kontroly (2026-10-16/17)
 | Kontrola | Výsledek |
 |---|---|
 | `python -m uv sync` (Python 3.12.6, streamlit 1.66.0, pandas 3.0.6, numpy 2.5.4, plotly 7.1.0, scikit-learn 1.9.1) | OK |
 | `python -m uv sync --locked` | OK |
-| `python -m uv run pytest` | 37 passed (AppTest: lékařský průchod, globální přepočet přes dialog, jednoduchý panel + upozornění, dialog importu, reset pohledu, obrazovka bez dat) |
+| `python -m uv run pytest` | 41 passed (AppTest: jednoduchý přehled, lékařský průchod, globální přepočet přes dialog, jednoduchý panel + upozornění, dialog importu, reset pohledu, obrazovka bez dat; mapování kliku do buňky na pacienta) |
+| Vizuální kontrola stránky Pacienti (jen testovací syntetická CSV): přehled bez zaškrtávacích polí, klik do buňky otevře detail téhož pacienta | OK |
 | Ridge vs. peer medián na skutečných datech | 107/157 hodnoceno u obou; medián \|rozdílu\| 1,13 vs. 1,25 dne; Ridge ~8 s výpočtu |
 | `python -m uv run ruff check .` | All checks passed |
 | `python -m uv run python scripts/check_real_data.py` (skutečná data) | 13/13 OK; 107 hodnotitelných, 3 nad prahem |

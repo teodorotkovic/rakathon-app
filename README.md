@@ -9,9 +9,10 @@ okomentovat a exportovat.
 > zátěž péče neznamená automaticky lepší zdravotní výsledek.
 
 ## Dvě obrazovky
-- **Pacienti** – seznam seřazený podle míry odchylky (nehodnotitelní na konci, nikdy skrytí), filtry, detail
-  pacienta: s čím ho porovnáváme, co vyvolává označení, čím se liší, časová osa epizod, laboratoře, podobní
-  pacienti, posouzení lékařem, přechod do analýzy.
+- **Pacienti** – nahoře dvě věty „co sledujeme / s kým porovnáváme“, počty *Lze porovnat* a *Neobvyklé případy*,
+  filtry a tabulka seřazená podle míry odchylky (neporovnatelní na konci s důvodem, nikdy skrytí; sloupec
+  *Spolehlivost*). Kliknutím na řádek se otevře detail: s čím ho porovnáváme, co vyvolává označení, čím se liší,
+  časová osa epizod, laboratoře, podobní pacienti, posouzení lékařem, přechod do analýzy. Vysvětlivky jsou dole.
 - **Analýza odchylek** – volba ukazatelů/škály/prahu, oddělené role „zobrazit vybrané“ × „použít jako referenci“,
   rozložení odchylek s výběrem bodů, seřazené neobvyklé případy, **skupiny uvnitř outlierů** s popisem vůči
   referenci, kontext charakteristik, uložení/načtení pohledu a export.
@@ -51,7 +52,7 @@ Po instalaci závislostí nepotřebuje síť.
 
 ## Testy a kontroly
 ```powershell
-python -m uv run pytest                                  # 37 testů vč. AppTest průchodů UI
+python -m uv run pytest                                  # 41 testů vč. AppTest průchodů UI
 python -m uv run ruff check . ; python -m uv run ruff format --check .
 python -m uv run python scripts/check_real_data.py       # strukturální kontrola na skutečných datech (bez výpisu pacientů)
 python -m uv run python scripts/profile_data.py          # profil dat do runtime/profile/

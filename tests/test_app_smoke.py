@@ -39,17 +39,31 @@ def _button(at, label):
     return next(b for b in at.button if b.label == label)
 
 
+def _open_first_patient(at) -> str:
+    """Ekvivalent kliknutí na první řádek (AppTest neumí klik do buňky tabulky; mapování testuje test_ui_helpers)."""
+    pid = str(at.dataframe[0].value["ID"].iloc[0])
+    at.session_state["selected_patient_id"] = pid
+    at.run()
+    return pid
+
+
+def test_overview_is_simple(app):
+    at = app
+    assert [m.label for m in at.metric] == ["Lze porovnat", "Neobvyklé případy"]
+    assert any("Co sledujeme" in m.value and "S kým porovnáváme" in m.value for m in at.markdown)
+    assert not any("Dataset" in c.value or "B-" in c.value for c in at.caption)
+    assert not any(s.key == "pf_pick" for s in at.selectbox)  # žádné otevírání podle ID pod tabulkou
+    assert "Spolehlivost" in at.dataframe[0].value.columns
+
+
 def test_full_doctor_flow(app, tmp_path):
     at = app
     assert at.title[0].value == "Pacienti"
     assert not any("Syntetick" in w.value for w in at.warning)
-    hodnoceno = next(m for m in at.metric if m.label == "Hodnoceno")
-    assert "/" in hodnoceno.value
+    porovnat = next(m for m in at.metric if m.label == "Lze porovnat")
+    assert "/" in porovnat.value
 
-    pick = at.selectbox(key="pf_pick")
-    pid = pick.options[0]
-    pick.set_value(pid).run()
-    at.button(key="pf_open").click().run()
+    pid = _open_first_patient(at)
     assert not at.exception, [e.value for e in at.exception]
     assert at.subheader[0].value == f"Pacient {pid}"
     assert any("S čím pacienta porovnáváme" in m.value for m in at.markdown)
@@ -95,12 +109,9 @@ def test_full_doctor_flow(app, tmp_path):
 
 def test_global_recompute_creates_new_context(app):
     at = app
-    pick = at.selectbox(key="pf_pick")
-    pid = pick.options[0]
-    pick.set_value(pid).run()
-    at.button(key="pf_open").click().run()
+    _open_first_patient(at)
     _button(at, "Uložit posouzení").click().run()  # posouzení ve výchozím globálním kontextu
-    old_id = next(c.value for c in at.caption if "globální očekávání" in c.value)
+    assert not any("Rozklad predikce modelu" in c.value for c in at.caption)
 
     next(b for b in at.sidebar.button if b.label == "Jak počítáme očekávání").click().run()
     assert any(c.label.startswith("Podobní pacienti") and c.value for c in at.checkbox)
@@ -110,9 +121,8 @@ def test_global_recompute_creates_new_context(app):
     _button(at, "Přepočítat očekávání").click().run()
     assert not at.exception, [e.value for e in at.exception]
     assert not any(c.label.startswith("Statistický model") for c in at.checkbox)  # dialog zavřen
-    new_id = next(c.value for c in at.caption if "globální očekávání" in c.value)
-    assert new_id != old_id
-    assert any("Rozklad predikce modelu" in c.value for c in at.caption)
+    assert any("Rozklad predikce modelu" in c.value for c in at.caption)  # nová metoda je aktivní
+    assert at.session_state["baseline_config"].method == "ridge_loo"
     # posouzení z předchozího kontextu není aktuální, jen v historii
     assert any("Neposouzeno" in m.value for m in at.markdown if "Aktuální posouzení" in m.value)
     assert any("1 jinde" in e.label for e in at.expander)
